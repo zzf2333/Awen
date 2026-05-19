@@ -70,12 +70,10 @@ The install script will:
 2. Install to `~/.local/bin/awen`
 3. Copy specs and zsh plugin to `~/.config/awen/`
 4. Generate default config file
+5. Add `source ~/.config/awen/awen.zsh` to `~/.zshrc` (interactive prompt, default yes)
+6. Add `~/.local/bin` to PATH if missing
 
-Then add to your `~/.zshrc`:
-
-```bash
-source ~/.config/awen/awen.zsh
-```
+Open a new terminal — Awen starts automatically and imports your zsh history on first launch.
 
 ### Manual Installation
 
@@ -100,13 +98,16 @@ cp specs/*.toml ~/.config/awen/specs/
 ### CLI Commands
 
 ```bash
-awen start     # Start the daemon
-awen stop      # Stop the daemon
-awen status    # Show status
-awen logs      # Show logs
-awen config    # Show configuration
-awen context   # Show current context
+awen start              # Start the daemon (auto-started by the zsh plugin)
+awen stop               # Stop the daemon
+awen status             # Show status
+awen logs               # Show logs
+awen config             # Show configuration
+awen context            # Show current context
+awen history import     # Import from zsh history (auto-runs on first launch)
 ```
+
+The `history import` command accepts `--file <path>` for a custom history file and `--force` to re-import when the database is not empty.
 
 ## Configuration
 

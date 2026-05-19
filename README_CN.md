@@ -70,12 +70,10 @@ cd awen
 2. 安装到 `~/.local/bin/awen`
 3. 复制 specs 和 zsh 插件到 `~/.config/awen/`
 4. 生成默认配置文件
+5. 自动将 `source ~/.config/awen/awen.zsh` 添加到 `~/.zshrc`（交互式确认，默认 yes）
+6. 如 `~/.local/bin` 不在 PATH 中，自动添加
 
-然后在 `~/.zshrc` 中添加：
-
-```bash
-source ~/.config/awen/awen.zsh
-```
+打开新终端即可使用 — Awen 会自动启动，首次运行时自动导入 zsh 历史记录。
 
 ### 手动安装
 
@@ -100,13 +98,16 @@ cp specs/*.toml ~/.config/awen/specs/
 ### CLI 命令
 
 ```bash
-awen start     # 启动 daemon
-awen stop      # 停止 daemon
-awen status    # 查看状态
-awen logs      # 查看日志
-awen config    # 查看配置
-awen context   # 查看当前上下文
+awen start              # 启动 daemon（zsh 插件会自动启动）
+awen stop               # 停止 daemon
+awen status             # 查看状态
+awen logs               # 查看日志
+awen config             # 查看配置
+awen context            # 查看当前上下文
+awen history import     # 从 zsh 历史导入（首次启动自动执行）
 ```
+
+`history import` 支持 `--file <路径>` 指定自定义历史文件，`--force` 强制重新导入。
 
 ## 配置
 
