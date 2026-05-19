@@ -9,6 +9,7 @@ typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
+typeset -g _AWEN_GHOST_STYLE="fg=242"
 
 # Async AI state
 typeset -g _AWEN_AI_FD=""
@@ -101,13 +102,15 @@ _awen_send_nc() {
     fi
 }
 
+_awen_remove_ghost_highlight() {
+    region_highlight=("${(@)region_highlight:#*$_AWEN_GHOST_STYLE}")
+    _AWEN_GHOST_HIGHLIGHT=""
+}
+
 _awen_clear_ghost() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
         _AWEN_SUGGESTION=""
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         POSTDISPLAY=""
         zle -R
     fi
@@ -121,11 +124,7 @@ _awen_clear_hint() {
 _awen_render_ghost() {
     local suggestion="$1"
 
-    # Remove previous ghost highlight
-    if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-        region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-        _AWEN_GHOST_HIGHLIGHT=""
-    fi
+    _awen_remove_ghost_highlight
 
     if [[ -z "$suggestion" ]]; then
         _AWEN_SUGGESTION=""
@@ -159,7 +158,7 @@ _awen_render_ghost() {
     local ghost_part="${full_suggestion#$input}"
     if [[ -n "$ghost_part" ]]; then
         POSTDISPLAY="$ghost_part"
-        _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) fg=242"
+        _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
         region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
     else
         POSTDISPLAY=""
@@ -250,10 +249,7 @@ _awen_apply_response() {
     local response="$1"
 
     if [[ -z "$response" ]]; then
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
         return
@@ -288,10 +284,7 @@ _awen_apply_response() {
     if [[ -n "$suggestion_text" ]]; then
         _awen_render_ghost "$suggestion_text"
     else
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
     fi
@@ -302,10 +295,7 @@ _awen_apply_response() {
 # Phase 1: Synchronous local-only suggest (<20ms)
 _awen_suggest_local() {
     if [[ -z "$BUFFER" || ! -S "$_AWEN_SOCKET" ]]; then
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
         _awen_clear_hint
@@ -339,6 +329,7 @@ _awen_cancel_pending_ai() {
         _AWEN_AI_FD=""
     fi
     _AWEN_AI_PID=""
+    _AWEN_AI_PENDING=""
 }
 
 # Phase 2: Schedule async AI request after AWEN_AI_DELAY
@@ -413,15 +404,13 @@ _awen_apply_ai() {
 _awen_accept() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
         _awen_cancel_pending_ai
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         BUFFER="$_AWEN_SUGGESTION"
         CURSOR=${#BUFFER}
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
+        zle -R
     else
         # Default right arrow behavior
         zle forward-char
@@ -438,10 +427,7 @@ _awen_accept_word() {
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
             _awen_cancel_pending_ai
-            if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-                region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-                _AWEN_GHOST_HIGHLIGHT=""
-            fi
+            _awen_remove_ghost_highlight
             BUFFER="$_AWEN_SUGGESTION"
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
@@ -450,6 +436,7 @@ _awen_accept_word() {
             _awen_render_ghost "$_AWEN_SUGGESTION"
         fi
         CURSOR=${#BUFFER}
+        zle -R
     else
         zle forward-word
     fi
@@ -459,10 +446,7 @@ _awen_accept_word() {
 _awen_dismiss() {
     if [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
         _awen_cancel_pending_ai
-        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
-            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
-            _AWEN_GHOST_HIGHLIGHT=""
-        fi
+        _awen_remove_ghost_highlight
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
