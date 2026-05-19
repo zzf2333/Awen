@@ -1,8 +1,13 @@
 use crate::protocol::{Suggestion, SuggestionSource};
+use crate::sanitize::{SENSITIVE_COMMAND_RE, SENSITIVE_VALUE_RE};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 use rusqlite::{Connection, params};
 use std::path::{Path, PathBuf};
+
+pub fn is_sensitive_command(command: &str) -> bool {
+    SENSITIVE_VALUE_RE.is_match(command) || SENSITIVE_COMMAND_RE.is_match(command)
+}
 
 pub struct HistoryLayer {
     db_path: PathBuf,
@@ -31,6 +36,10 @@ impl HistoryLayer {
     }
 
     pub fn record(&self, command: &str, cwd: &str, exit_code: i32) -> Result<(), rusqlite::Error> {
+        if is_sensitive_command(command) {
+            tracing::debug!("skipping sensitive command in history");
+            return Ok(());
+        }
         let conn = Connection::open(&self.db_path)?;
         let now = chrono::Utc::now().timestamp();
         conn.execute(
@@ -184,5 +193,40 @@ mod tests {
 
         let results = layer.suggest("make", "/project-a", 5);
         assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_is_sensitive_command_docker_login() {
+        assert!(is_sensitive_command(
+            "docker login registry.io -u user -p secret123"
+        ));
+    }
+
+    #[test]
+    fn test_is_sensitive_command_export_secret() {
+        assert!(is_sensitive_command(
+            "export API_KEY=sk-abcdefghijklmnopqrstuvwxyz12345"
+        ));
+        assert!(is_sensitive_command("export SECRET_TOKEN=abc123"));
+    }
+
+    #[test]
+    fn test_is_sensitive_command_safe() {
+        assert!(!is_sensitive_command("cargo build --release"));
+        assert!(!is_sensitive_command("git status"));
+        assert!(!is_sensitive_command("ls -la"));
+        assert!(!is_sensitive_command("npm install express"));
+    }
+
+    #[test]
+    fn test_record_skips_sensitive() {
+        let (_dir, layer) = setup();
+        layer
+            .record("docker login registry.io -u user -p secret", "/tmp", 0)
+            .unwrap();
+        assert_eq!(layer.count(), 0);
+
+        layer.record("cargo build", "/tmp", 0).unwrap();
+        assert_eq!(layer.count(), 1);
     }
 }

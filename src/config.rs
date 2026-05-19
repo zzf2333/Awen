@@ -44,6 +44,7 @@ pub struct ContextConfig {
     pub stderr_max_chars: usize,
     pub repo_detect: bool,
     pub git_context: bool,
+    pub capture_stderr: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +97,7 @@ impl Default for ContextConfig {
             stderr_max_chars: 500,
             repo_detect: true,
             git_context: true,
+            capture_stderr: false,
         }
     }
 }
@@ -107,7 +109,7 @@ impl Default for UiConfig {
             dropdown_max_items: 8,
             hint_style: "above".into(),
             risk_detection: true,
-            command_explanation: true,
+            command_explanation: false,
         }
     }
 }
@@ -180,7 +182,9 @@ mod tests {
         assert_eq!(config.ai.provider, "deepseek");
         assert_eq!(config.ai.debounce_ms, 300);
         assert_eq!(config.context.session_history_size, 20);
+        assert!(!config.context.capture_stderr);
         assert_eq!(config.ui.ghost_text_color, 242);
+        assert!(!config.ui.command_explanation);
     }
 
     #[test]
@@ -202,6 +206,7 @@ session_history_size = 30
 stderr_max_chars = 1000
 repo_detect = true
 git_context = false
+capture_stderr = true
 
 [ui]
 ghost_text_color = 240
