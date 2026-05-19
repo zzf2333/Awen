@@ -43,6 +43,12 @@ mkdir -p "${INSTALL_DIR}"
 cp "${SCRIPT_DIR}/target/release/awen" "${INSTALL_DIR}/awen"
 chmod +x "${INSTALL_DIR}/awen"
 
+# macOS: clear quarantine/provenance attrs and re-sign so Gatekeeper won't SIGKILL
+if [[ "$(uname)" == "Darwin" ]]; then
+    xattr -cr "${INSTALL_DIR}/awen" 2>/dev/null
+    codesign -fs - "${INSTALL_DIR}/awen" 2>/dev/null
+fi
+
 info "Installing specs to ${CONFIG_DIR}/specs/..."
 mkdir -p "${CONFIG_DIR}/specs"
 cp "${SCRIPT_DIR}"/specs/*.toml "${CONFIG_DIR}/specs/"
