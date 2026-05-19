@@ -70,12 +70,10 @@ The install script will:
 2. Install to `~/.local/bin/awen`
 3. Copy specs and zsh plugin to `~/.config/awen/`
 4. Generate default config file
+5. Add `source ~/.config/awen/awen.zsh` to `~/.zshrc` (interactive prompt, default yes)
+6. Add `~/.local/bin` to PATH if missing
 
-Then add to your `~/.zshrc`:
-
-```bash
-source ~/.config/awen/awen.zsh
-```
+Open a new terminal — Awen starts automatically and imports your zsh history on first launch.
 
 ### Manual Installation
 
@@ -100,13 +98,16 @@ cp specs/*.toml ~/.config/awen/specs/
 ### CLI Commands
 
 ```bash
-awen start     # Start the daemon
-awen stop      # Stop the daemon
-awen status    # Show status
-awen logs      # Show logs
-awen config    # Show configuration
-awen context   # Show current context
+awen start              # Start the daemon (auto-started by the zsh plugin)
+awen stop               # Stop the daemon
+awen status             # Show status
+awen logs               # Show logs
+awen config             # Show configuration
+awen context            # Show current context
+awen history import     # Import from zsh history (auto-runs on first launch)
 ```
+
+The `history import` command accepts `--file <path>` for a custom history file and `--force` to re-import when the database is not empty.
 
 ## Configuration
 
@@ -208,22 +209,25 @@ Awen's security model is minimal because it **always suggests, never executes**:
 
 ## Development
 
-### Build
+### Quick Iteration
+
+```bash
+make dev       # Debug build + sync plugin + restart daemon (fastest)
+make release   # Release build + sync + restart
+make sync      # Sync plugin/specs only (no rebuild, for zsh-only changes)
+make test      # cargo test + shellcheck + zsh smoke tests
+make lint      # clippy + fmt + shellcheck
+make status    # Check daemon status
+make logs      # Show recent daemon logs
+```
+
+`make dev` is the primary dev loop — one command to build, deploy, and restart. Changes are live in the current shell immediately.
+
+### Manual Build
 
 ```bash
 cargo build
-```
-
-### Test
-
-```bash
-cargo test                         # Rust unit + E2E tests
-zsh tests/zsh_smoke_test.zsh       # zsh plugin smoke tests
-```
-
-### Lint
-
-```bash
+cargo test
 cargo clippy
 cargo fmt --check
 ```

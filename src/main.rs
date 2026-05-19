@@ -1,8 +1,11 @@
 use awen::config;
 use awen::daemon;
+use awen::layer::history::HistoryLayer;
+use awen::layer::history_import;
 use awen::protocol;
 
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -33,6 +36,24 @@ enum Commands {
     Config,
     /// Show current context engine state
     Context,
+    /// Manage command history
+    History {
+        #[command(subcommand)]
+        action: HistoryAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum HistoryAction {
+    /// Import commands from zsh history file
+    Import {
+        /// Path to history file (default: $HISTFILE or ~/.zsh_history)
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Force import even if database is not empty
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[tokio::main]
@@ -46,6 +67,9 @@ async fn main() {
         Commands::Logs { lines } => cmd_logs(lines),
         Commands::Config => cmd_config(),
         Commands::Context => cmd_context().await,
+        Commands::History { action } => match action {
+            HistoryAction::Import { file, force } => cmd_history_import(file, force),
+        },
     }
 }
 
@@ -154,6 +178,46 @@ fn cmd_config() {
         println!("# Create at: {}", config_path.display());
         println!();
         print!("{content}");
+    }
+}
+
+fn cmd_history_import(file: Option<PathBuf>, force: bool) {
+    let db_path = config::history_db_path();
+
+    if db_path.exists()
+        && !force
+        && let Ok(history) = HistoryLayer::new(&db_path)
+    {
+        let count = history.count();
+        if count > 0 {
+            eprintln!(
+                "history database already has {count} entries. Use --force to import anyway."
+            );
+            std::process::exit(1);
+        }
+    }
+
+    let histfile = file.unwrap_or_else(config::default_zsh_histfile);
+    if !histfile.exists() {
+        eprintln!("history file not found: {}", histfile.display());
+        std::process::exit(1);
+    }
+
+    std::fs::create_dir_all(config::data_dir()).ok();
+    println!("importing from {}...", histfile.display());
+
+    match history_import::import_zsh_history(&db_path, &histfile) {
+        Ok(r) => {
+            println!("import complete:");
+            println!("  total entries parsed: {}", r.total_lines);
+            println!("  imported:             {}", r.imported);
+            println!("  skipped (sensitive):  {}", r.skipped_sensitive);
+            println!("  skipped (empty):      {}", r.skipped_empty);
+        }
+        Err(e) => {
+            eprintln!("import failed: {e}");
+            std::process::exit(1);
+        }
     }
 }
 

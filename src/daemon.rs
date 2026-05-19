@@ -93,6 +93,9 @@ pub async fn run_on_paths_with_ai(
         }
     };
 
+    let need_history_import = history.count() == 0;
+    let import_db_path = paths.db.clone();
+
     let mut specs = SpecsLayer::new();
     specs.load_builtin_specs();
     specs.load_user_specs(&paths.config_dir.join("specs"));
@@ -128,6 +131,33 @@ pub async fn run_on_paths_with_ai(
 
     tracing::info!("listening on {}", paths.socket.display());
     println!("awen daemon running (socket: {})", paths.socket.display());
+
+    if need_history_import {
+        tokio::task::spawn_blocking(move || {
+            let histfile = config::default_zsh_histfile();
+            if !histfile.exists() {
+                tracing::info!(
+                    "no zsh history at {}, skipping auto-import",
+                    histfile.display()
+                );
+                return;
+            }
+            tracing::info!("empty history DB, importing from {}", histfile.display());
+            match crate::layer::history_import::import_zsh_history(&import_db_path, &histfile) {
+                Ok(r) => {
+                    tracing::info!(
+                        "history import: {} imported, {} sensitive skipped, {} empty skipped",
+                        r.imported,
+                        r.skipped_sensitive,
+                        r.skipped_empty,
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("history import failed: {e}");
+                }
+            }
+        });
+    }
 
     let shutdown = Arc::new(tokio::sync::Notify::new());
     let shutdown_clone = shutdown.clone();

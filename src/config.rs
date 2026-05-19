@@ -162,6 +162,15 @@ pub fn history_db_path() -> PathBuf {
     data_dir().join("history.db")
 }
 
+pub fn default_zsh_histfile() -> PathBuf {
+    if let Ok(histfile) = std::env::var("HISTFILE") {
+        return PathBuf::from(histfile);
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".zsh_history")
+}
+
 pub fn load_config() -> AwenConfig {
     let path = config_dir().join("config.toml");
     if path.exists() {

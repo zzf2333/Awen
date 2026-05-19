@@ -102,35 +102,65 @@ echo ""
 info "${BOLD}Awen installed successfully!${RESET}"
 echo ""
 
-# Check if already sourced in .zshrc
+# Interactive prompt helper: defaults to yes in non-interactive mode (pipe)
+ask_yes() {
+    local prompt="$1"
+    if [[ ! -t 0 ]]; then
+        echo -e "${prompt} [Y/n] Y (non-interactive, auto-yes)"
+        return 0
+    fi
+    local answer
+    read -rp "$(echo -e "${prompt} [Y/n] ")" answer
+    answer="${answer:-Y}"
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+# Check PATH and offer to fix
+if [[ ":${PATH}:" != *":${INSTALL_DIR}:"* ]]; then
+    ZSHRC="${HOME}/.zshrc"
+    if [[ -f "$ZSHRC" ]] && grep -qF '.local/bin' "$ZSHRC"; then
+        info "${INSTALL_DIR} PATH entry already in .zshrc"
+    elif ask_yes "${BOLD}${INSTALL_DIR} is not in PATH. Add to ~/.zshrc?"; then
+        {
+            echo ""
+            echo "# Added by Awen installer"
+            # shellcheck disable=SC2016
+            echo 'export PATH="${HOME}/.local/bin:${PATH}"'
+        } >> "${HOME}/.zshrc"
+        info "PATH entry added to ~/.zshrc"
+        export PATH="${INSTALL_DIR}:${PATH}"
+    else
+        # shellcheck disable=SC2016
+        warn 'Skipped. Add manually: export PATH="${HOME}/.local/bin:${PATH}"'
+    fi
+fi
+
+# Source the zsh plugin in .zshrc
 ZSHRC="${HOME}/.zshrc"
 SOURCE_LINE="source ${PLUGIN_DIR}/awen.zsh"
 
 if [[ -f "$ZSHRC" ]] && grep -qF "awen.zsh" "$ZSHRC"; then
     info "awen.zsh is already sourced in .zshrc"
+elif ask_yes "${BOLD}Add 'source ~/.config/awen/awen.zsh' to ~/.zshrc?"; then
+    {
+        echo ""
+        echo "# Awen — Terminal Intelligence Layer"
+        echo "${SOURCE_LINE}"
+    } >> "$ZSHRC"
+    info "Added to ~/.zshrc"
 else
-    echo ""
-    echo -e "${BOLD}Add this line to your ~/.zshrc:${RESET}"
-    echo ""
-    echo "  ${SOURCE_LINE}"
-    echo ""
-    echo "Then restart your shell or run:"
-    echo ""
-    echo "  source ~/.zshrc"
-fi
-
-# Check PATH
-if [[ ":${PATH}:" != *":${INSTALL_DIR}:"* ]]; then
-    warn "${INSTALL_DIR} is not in your PATH."
-    echo "  Add to ~/.zshrc: export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+    warn "Skipped. Add manually: ${SOURCE_LINE}"
 fi
 
 echo ""
 echo -e "${BOLD}Quick start:${RESET}"
-echo "  awen start    — start the daemon"
+echo "  Open a new terminal — Awen will start automatically."
 echo "  awen status   — check daemon status"
 echo "  awen stop     — stop the daemon"
 echo "  awen config   — view configuration"
+echo ""
+echo "  On first launch, Awen will import your zsh history automatically."
+echo "  To import manually: awen history import"
 echo ""
 echo "For AI completions, set your API key in ${CONFIG_DIR}/config.toml"
 echo "or export DEEPSEEK_API_KEY=sk-your-key"

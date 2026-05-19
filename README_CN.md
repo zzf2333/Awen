@@ -70,12 +70,10 @@ cd awen
 2. 安装到 `~/.local/bin/awen`
 3. 复制 specs 和 zsh 插件到 `~/.config/awen/`
 4. 生成默认配置文件
+5. 自动将 `source ~/.config/awen/awen.zsh` 添加到 `~/.zshrc`（交互式确认，默认 yes）
+6. 如 `~/.local/bin` 不在 PATH 中，自动添加
 
-然后在 `~/.zshrc` 中添加：
-
-```bash
-source ~/.config/awen/awen.zsh
-```
+打开新终端即可使用 — Awen 会自动启动，首次运行时自动导入 zsh 历史记录。
 
 ### 手动安装
 
@@ -100,13 +98,16 @@ cp specs/*.toml ~/.config/awen/specs/
 ### CLI 命令
 
 ```bash
-awen start     # 启动 daemon
-awen stop      # 停止 daemon
-awen status    # 查看状态
-awen logs      # 查看日志
-awen config    # 查看配置
-awen context   # 查看当前上下文
+awen start              # 启动 daemon（zsh 插件会自动启动）
+awen stop               # 停止 daemon
+awen status             # 查看状态
+awen logs               # 查看日志
+awen config             # 查看配置
+awen context            # 查看当前上下文
+awen history import     # 从 zsh 历史导入（首次启动自动执行）
 ```
+
+`history import` 支持 `--file <路径>` 指定自定义历史文件，`--force` 强制重新导入。
 
 ## 配置
 
@@ -208,22 +209,25 @@ Awen 的安全模型极简，因为它**永远只建议，永远不执行**：
 
 ## 开发
 
-### 构建
+### 快速迭代
+
+```bash
+make dev       # Debug 构建 + 同步插件 + 重启 daemon（最快）
+make release   # Release 构建 + 同步 + 重启
+make sync      # 仅同步 plugin/specs（不重新编译，改 zsh 时用）
+make test      # cargo test + shellcheck + zsh 冒烟测试
+make lint      # clippy + fmt + shellcheck
+make status    # 查看 daemon 状态
+make logs      # 查看最近的 daemon 日志
+```
+
+`make dev` 是主要的开发循环 — 一条命令完成构建、部署、重启，改动立即生效。
+
+### 手动构建
 
 ```bash
 cargo build
-```
-
-### 测试
-
-```bash
-cargo test                         # Rust 单元测试 + E2E 测试
-zsh tests/zsh_smoke_test.zsh       # zsh 插件冒烟测试
-```
-
-### 代码检查
-
-```bash
+cargo test
 cargo clippy
 cargo fmt --check
 ```
