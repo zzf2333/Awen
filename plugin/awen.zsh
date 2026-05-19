@@ -192,12 +192,10 @@ _awen_render_menu() {
     local selected_full="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
     local ghost_part="${selected_full#$input}"
 
-    # Terminal height safety
     local max_visible=$_AWEN_MENU_MAX
     (( max_visible > LINES - 3 )) && max_visible=$(( LINES - 3 ))
     (( max_visible < 1 )) && max_visible=1
 
-    # Scroll window around selected item
     local scroll_start=1
     if (( _AWEN_MENU_COUNT > max_visible )); then
         if (( _AWEN_MENU_INDEX > max_visible )); then
@@ -208,68 +206,48 @@ _awen_render_menu() {
     (( scroll_end > _AWEN_MENU_COUNT )) && scroll_end=$_AWEN_MENU_COUNT
 
     local pd=""
-    local -a highlights=()
     local offset=$#BUFFER
 
-    # Ghost text
     if [[ -n "$ghost_part" ]]; then
         pd="$ghost_part"
-        highlights+=("$offset $(( offset + ${#ghost_part} )) $_AWEN_GHOST_STYLE")
+        region_highlight+=("$offset $(( offset + ${#ghost_part} )) $_AWEN_GHOST_STYLE")
         (( offset += ${#ghost_part} ))
     fi
 
-    # Menu items
-    local i
+    local i item_text item_source tag entry entry_len
     for (( i=scroll_start; i<=scroll_end; i++ )); do
-        local item_text="${_AWEN_MENU_TEXTS[$i]}"
-        local item_source="${_AWEN_MENU_SOURCES[$i]}"
-        local tag=""
+        item_text="${_AWEN_MENU_TEXTS[$i]}"
+        item_source="${_AWEN_MENU_SOURCES[$i]}"
+        tag=""
         case "$item_source" in
             history) tag="[hist]" ;;
             specs)   tag="[spec]" ;;
             ai)      tag="[ai]"   ;;
             failure) tag="[fix]"  ;;
-            *)       tag=""       ;;
         esac
-
-        local line
         if [[ -n "$tag" ]]; then
-            line=$'\n'"  ${item_text}  ${tag}"
+            entry="  ${item_text}  ${tag}"
         else
-            line=$'\n'"  ${item_text}"
+            entry="  ${item_text}"
         fi
-
-        pd+="$line"
-        local line_start=$(( offset + 1 ))
-        local line_end=$(( offset + ${#line} ))
+        entry_len=${#entry}
+        pd+=$'\n'"${entry}"
 
         if (( i == _AWEN_MENU_INDEX )); then
-            highlights+=("$line_start $line_end standout")
+            region_highlight+=("$(( offset + 1 )) $(( offset + 1 + entry_len )) standout")
         else
-            highlights+=("$line_start $line_end fg=245")
+            region_highlight+=("$(( offset + 1 )) $(( offset + 1 + entry_len )) fg=245")
         fi
-        (( offset += ${#line} ))
+        (( offset += 1 + entry_len ))
     done
 
-    # Scroll indicators
-    local scroll_info=""
-    (( scroll_start > 1 )) && scroll_info+=" ↑"
-    (( scroll_end < _AWEN_MENU_COUNT )) && scroll_info+=" ↓"
-
-    # Footer
-    local footer=$'\n'"  ↑↓ navigate  ⏎ confirm  esc dismiss${scroll_info}"
-    pd+="$footer"
-    local footer_start=$(( offset + 1 ))
-    local footer_end=$(( offset + ${#footer} ))
-    highlights+=("$footer_start $footer_end fg=240")
+    local foot="  ↑↓ navigate  ⏎ confirm  shift+tab dismiss"
+    local foot_len=${#foot}
+    pd+=$'\n'"${foot}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + foot_len )) fg=240")
 
     POSTDISPLAY="$pd"
     _AWEN_SUGGESTION="$selected_full"
-
-    local h
-    for h in "${highlights[@]}"; do
-        region_highlight+=("$h")
-    done
 }
 
 _awen_render_hint() {
@@ -709,13 +687,21 @@ _awen_preexec() {
 
 # Self-insert wrapper: trigger suggest after each keystroke
 _awen_self_insert() {
-    (( _AWEN_MENU_ACTIVE )) && _awen_menu_reset
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        POSTDISPLAY=""
+    fi
     zle .self-insert
     _awen_suggest_local
 }
 
 _awen_backward_delete_char() {
-    (( _AWEN_MENU_ACTIVE )) && _awen_menu_reset
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        POSTDISPLAY=""
+    fi
     zle .backward-delete-char
     _awen_suggest_local
 }

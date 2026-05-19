@@ -77,8 +77,8 @@ Requires jq installed for multi-suggestion parsing.
 
 ## Test 9: Menu Dismiss
 
-1. With menu visible, press Escape — menu and ghost text disappear
-2. With menu visible, press Shift+Tab — same behavior as Escape
+1. With menu visible, press Shift+Tab — menu and ghost text disappear
+2. BUFFER remains unchanged (partial input preserved)
 
 ## Test 10: Menu Reset on Input
 
