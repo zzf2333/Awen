@@ -27,6 +27,16 @@ _awen_extract_json_value() {
     echo "$result"
 }
 
+_awen_json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    echo -n "$s"
+}
+
 _awen_find_binary() {
     if [[ -x "${HOME}/.local/bin/awen" ]]; then
         _AWEN_BIN="${HOME}/.local/bin/awen"
@@ -163,15 +173,41 @@ _awen_suggest() {
 
     # Build JSON request
     local request
-    request=$(printf '{"type":"suggest","input":"%s","cursor_pos":%d,"context":{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}}' \
-        "$(echo "$BUFFER" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-        "$CURSOR" \
-        "$(echo "$cwd" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-        "$(if [[ -n "$last_cmd" ]]; then echo "\"$(echo "$last_cmd" | sed 's/\\/\\\\/g; s/"/\\"/g')\""; else echo "null"; fi)" \
-        "${last_exit:-0}" \
-        "$(if [[ -n "$last_stderr" ]]; then echo "\"$(echo "$last_stderr" | sed 's/\\/\\\\/g; s/"/\\"/g')\""; else echo "null"; fi)" \
-        "$(if [[ -n "$git_branch" ]]; then echo "\"$git_branch\""; else echo "null"; fi)" \
-    )
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        request=$(jq -n \
+            --arg input "$BUFFER" \
+            --argjson cursor "$CURSOR" \
+            --arg cwd "$cwd" \
+            --arg last_cmd "${last_cmd:-}" \
+            --argjson exit_code "${last_exit:-0}" \
+            --arg stderr "${last_stderr:-}" \
+            --arg branch "${git_branch:-}" \
+            '{type: "suggest", input: $input, cursor_pos: $cursor, context: {
+                cwd: $cwd,
+                last_command: (if $last_cmd == "" then null else $last_cmd end),
+                last_exit_code: $exit_code,
+                last_stderr: (if $stderr == "" then null else $stderr end),
+                git_branch: (if $branch == "" then null else $branch end),
+                git_status: null, session_commands: [], env_hints: []
+            }}' 2>/dev/null)
+    else
+        local esc_input=$(_awen_json_escape "$BUFFER")
+        local esc_cwd=$(_awen_json_escape "$cwd")
+        local cmd_json="null"
+        if [[ -n "$last_cmd" ]]; then
+            cmd_json="\"$(_awen_json_escape "$last_cmd")\""
+        fi
+        local stderr_json="null"
+        if [[ -n "$last_stderr" ]]; then
+            stderr_json="\"$(_awen_json_escape "$last_stderr")\""
+        fi
+        local branch_json="null"
+        if [[ -n "$git_branch" ]]; then
+            branch_json="\"$(_awen_json_escape "$git_branch")\""
+        fi
+        request=$(printf '{"type":"suggest","input":"%s","cursor_pos":%d,"context":{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}}' \
+            "$esc_input" "$CURSOR" "$esc_cwd" "$cmd_json" "${last_exit:-0}" "$stderr_json" "$branch_json")
+    fi
 
     local response
     response=$(_awen_send_nc "$request")
@@ -304,12 +340,25 @@ _awen_precmd() {
         fi
 
         local record_request
-        record_request=$(printf '{"type":"record","command":"%s","exit_code":%d,"stderr":%s,"cwd":"%s"}' \
-            "$(echo "$_AWEN_LAST_COMMAND" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-            "$_AWEN_LAST_EXIT_CODE" \
-            "$(if [[ -n "$stderr_content" ]]; then echo "\"$(echo "$stderr_content" | sed 's/\\/\\\\/g; s/"/\\"/g')\""; else echo "null"; fi)" \
-            "$(pwd | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-        )
+        if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+            record_request=$(jq -n \
+                --arg cmd "$_AWEN_LAST_COMMAND" \
+                --argjson exit "$_AWEN_LAST_EXIT_CODE" \
+                --arg stderr "${stderr_content:-}" \
+                --arg cwd "$(pwd)" \
+                '{type: "record", command: $cmd, exit_code: $exit,
+                  stderr: (if $stderr == "" then null else $stderr end),
+                  cwd: $cwd}' 2>/dev/null)
+        else
+            local esc_cmd=$(_awen_json_escape "$_AWEN_LAST_COMMAND")
+            local esc_cwd=$(_awen_json_escape "$(pwd)")
+            local stderr_json="null"
+            if [[ -n "$stderr_content" ]]; then
+                stderr_json="\"$(_awen_json_escape "$stderr_content")\""
+            fi
+            record_request=$(printf '{"type":"record","command":"%s","exit_code":%d,"stderr":%s,"cwd":"%s"}' \
+                "$esc_cmd" "$_AWEN_LAST_EXIT_CODE" "$stderr_json" "$esc_cwd")
+        fi
 
         # Send async, don't block prompt
         _awen_send_nc "$record_request" &>/dev/null &!
@@ -320,9 +369,11 @@ _awen_precmd() {
 _awen_preexec() {
     _AWEN_LAST_COMMAND="$1"
     : > "$_AWEN_LAST_STDERR_FILE"
-    # Save original stderr fd and redirect through tee for capture
-    exec {_AWEN_STDERR_BACKUP}>&2
-    exec 2> >(tee "$_AWEN_LAST_STDERR_FILE" >&${_AWEN_STDERR_BACKUP})
+    # Stderr capture is experimental — opt-in via AWEN_CAPTURE_STDERR=1
+    if [[ "${AWEN_CAPTURE_STDERR:-0}" == "1" ]]; then
+        exec {_AWEN_STDERR_BACKUP}>&2
+        exec 2> >(tee "$_AWEN_LAST_STDERR_FILE" >&${_AWEN_STDERR_BACKUP})
+    fi
 }
 
 # Self-insert wrapper: trigger suggest after each keystroke
@@ -366,25 +417,27 @@ awen_init() {
     zle -N _awen_dismiss
     zle -N _awen_suggest
 
-    # Bind keys
-    bindkey -M main '\e[C' _awen_accept          # Right arrow
-    bindkey -M main '\e[1;5C' _awen_accept_word  # Ctrl+Right
-    bindkey -M main '\e[27;5;67~' _awen_accept_word  # Ctrl+Right (alternate)
-    bindkey -M main '\e\e[C' _awen_accept_word   # Alt+Right (fallback)
-    bindkey -M main '\e[Z' _awen_dismiss          # Shift+Tab dismiss
-    bindkey -M main '^[' _awen_dismiss            # Esc
+    # Keybinding setup (disable with AWEN_ENABLE_KEYBIND_OVERRIDE=0)
+    if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then
+        bindkey -M main '\e[C' _awen_accept          # Right arrow
+        bindkey -M main '\e[1;5C' _awen_accept_word  # Ctrl+Right
+        bindkey -M main '\e[27;5;67~' _awen_accept_word  # Ctrl+Right (alternate)
+        bindkey -M main '\e\e[C' _awen_accept_word   # Alt+Right (fallback)
+        bindkey -M main '\e[Z' _awen_dismiss          # Shift+Tab dismiss
+        bindkey -M main '^[' _awen_dismiss            # Esc
 
-    # Override self-insert to trigger suggestions on every keystroke
-    local -a printable
-    printable=({a..z} {A..Z} {0..9} ' ' '-' '_' '.' '/' '~' ':' '=' '+' '@' ',' ';' '!' '?' '#' '$' '%' '^' '&' '*' '(' ')' '[' ']' '{' '}' '<' '>' '|' "'" '"' '`' '\\')
-    local key
-    for key in "${printable[@]}"; do
-        bindkey -M main "$key" _awen_self_insert
-    done
+        # Override self-insert to trigger suggestions on every keystroke
+        local -a printable
+        printable=({a..z} {A..Z} {0..9} ' ' '-' '_' '.' '/' '~' ':' '=' '+' '@' ',' ';' '!' '?' '#' '$' '%' '^' '&' '*' '(' ')' '[' ']' '{' '}' '<' '>' '|' "'" '"' '`' '\\')
+        local key
+        for key in "${printable[@]}"; do
+            bindkey -M main "$key" _awen_self_insert
+        done
 
-    # Backspace also triggers re-suggest
-    bindkey -M main '^?' _awen_backward_delete_char   # Backspace
-    bindkey -M main '^H' _awen_backward_delete_char   # Ctrl+H
+        # Backspace also triggers re-suggest
+        bindkey -M main '^?' _awen_backward_delete_char   # Backspace
+        bindkey -M main '^H' _awen_backward_delete_char   # Ctrl+H
+    fi
 
     # Register hooks
     autoload -Uz add-zsh-hook
