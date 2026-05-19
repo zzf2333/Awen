@@ -17,6 +17,8 @@ pub struct SuggestRequest {
     pub context: RequestContext,
     #[serde(default)]
     pub timestamp: Option<i64>,
+    #[serde(default)]
+    pub skip_ai: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +147,7 @@ mod tests {
                 env_hints: vec![],
             },
             timestamp: Some(1716100000),
+            skip_ai: false,
         });
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Request = serde_json::from_str(&json).unwrap();
@@ -152,7 +155,45 @@ mod tests {
             Request::Suggest(s) => {
                 assert_eq!(s.input, "docker run -");
                 assert_eq!(s.cursor_pos, 12);
+                assert!(!s.skip_ai);
             }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_suggest_request_skip_ai_roundtrip() {
+        let req = Request::Suggest(SuggestRequest {
+            input: "git status".into(),
+            cursor_pos: 10,
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: true,
+        });
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"skip_ai\":true"));
+        let parsed: Request = serde_json::from_str(&json).unwrap();
+        match parsed {
+            Request::Suggest(s) => assert!(s.skip_ai),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_suggest_request_skip_ai_default_false() {
+        let json = r#"{"type":"suggest","input":"ls","cursor_pos":2,"context":{"cwd":"/tmp","session_commands":[],"env_hints":[]}}"#;
+        let parsed: Request = serde_json::from_str(json).unwrap();
+        match parsed {
+            Request::Suggest(s) => assert!(!s.skip_ai),
             _ => panic!("wrong variant"),
         }
     }

@@ -271,6 +271,7 @@ async fn test_suggest_specs_completion() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -332,6 +333,7 @@ async fn test_suggest_history_after_record() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -377,6 +379,7 @@ async fn test_suggest_failure_recovery() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -426,6 +429,7 @@ async fn test_suggest_risk_warning() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -467,6 +471,7 @@ async fn test_suggest_no_warning_for_safe_command() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -571,6 +576,7 @@ async fn test_full_session_flow() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -603,6 +609,7 @@ async fn test_full_session_flow() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -637,6 +644,7 @@ async fn test_full_session_flow() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -742,6 +750,7 @@ async fn test_suggest_with_sensitive_context() {
                 env_hints: vec![],
             },
             timestamp: None,
+            skip_ai: false,
         }))
         .await;
 
@@ -782,6 +791,7 @@ async fn test_risk_warning_with_suggestions_coexist() {
                 env_hints: vec![],
             },
             timestamp: None,
+            skip_ai: false,
         }))
         .await;
 
@@ -827,6 +837,7 @@ async fn test_ai_disabled_local_suggestions_work() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -878,6 +889,7 @@ async fn test_ai_timeout_returns_local_suggestions() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let start = std::time::Instant::now();
@@ -949,6 +961,7 @@ async fn test_ai_suggestion_merged_into_response() {
             env_hints: vec![],
         },
         timestamp: None,
+        skip_ai: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1003,6 +1016,7 @@ async fn test_ai_debounce_skips_second_request() {
                 env_hints: vec![],
             },
             timestamp: None,
+            skip_ai: false,
         })
     };
 
@@ -1041,6 +1055,287 @@ async fn test_ai_debounce_skips_second_request() {
         1,
         "AI should NOT be called again within debounce window"
     );
+
+    daemon.shutdown().await;
+}
+
+// ============================================================
+// skip_ai E2E tests
+// ============================================================
+
+#[tokio::test]
+async fn test_skip_ai_returns_local_only() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "kubectl get".into(),
+        cursor_pos: 11,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: true,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "skip_ai=true should not include AI suggestions, got: {:?}",
+                s.suggestions.iter().map(|sg| sg.source).collect::<Vec<_>>()
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+    assert_eq!(
+        provider.calls(),
+        0,
+        "AI provider should never be called when skip_ai=true"
+    );
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_skip_ai_fast_response_with_slow_provider() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider: Arc<dyn AiProvider> = Arc::new(SlowMockProvider);
+    let daemon = TestDaemon::start_with_ai(config, provider).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "git ch".into(),
+        cursor_pos: 6,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: true,
+    });
+
+    let start = std::time::Instant::now();
+    let resp = daemon.send(&req).await;
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "skip_ai=true should return in <100ms even with slow AI provider (took {:?})",
+        elapsed
+    );
+
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "skip_ai=true should not have AI suggestions"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_skip_ai_false_still_calls_ai() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "kubectl get".into(),
+        cursor_pos: 11,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            let has_ai = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Ai);
+            assert!(
+                has_ai,
+                "skip_ai=false should include AI suggestions, got: {:?}",
+                s.suggestions.iter().map(|sg| sg.source).collect::<Vec<_>>()
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+    assert_eq!(
+        provider.calls(),
+        1,
+        "AI provider should be called when skip_ai=false"
+    );
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_skip_ai_false_risk_warning_still_skips_ai() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "rm -rf /".into(),
+        cursor_pos: 8,
+        context: RequestContext {
+            cwd: "/home/user".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(s.warning.is_some(), "should still detect risk warning");
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "AI should be skipped when risk warning is present"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+    assert_eq!(
+        provider.calls(),
+        0,
+        "AI should not be called when risk warning is present"
+    );
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_skip_ai_false_high_confidence_local_skips_ai() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    for _ in 0..10 {
+        daemon
+            .send(&Request::Record(RecordCommandRequest {
+                command: "git checkout main".into(),
+                exit_code: 0,
+                stderr: None,
+                cwd: "/home/user/project".into(),
+                duration_ms: None,
+            }))
+            .await;
+    }
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "git checkout main".into(),
+        cursor_pos: 17,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            let max_confidence = s
+                .suggestions
+                .iter()
+                .map(|sg| sg.confidence)
+                .fold(0.0_f64, f64::max);
+            if max_confidence >= 0.9 {
+                assert!(
+                    s.suggestions
+                        .iter()
+                        .all(|sg| sg.source != SuggestionSource::Ai),
+                    "AI should be skipped when local confidence >= 0.9"
+                );
+                assert_eq!(
+                    provider.calls(),
+                    0,
+                    "AI should not be called when local confidence is high"
+                );
+            }
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
 
     daemon.shutdown().await;
 }

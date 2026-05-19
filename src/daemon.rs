@@ -273,7 +273,9 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         )
     };
 
-    if let Some(provider) = ai_provider {
+    if !req.skip_ai
+        && let Some(provider) = ai_provider
+    {
         let max_local_confidence = response
             .suggestions
             .iter()

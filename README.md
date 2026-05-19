@@ -10,7 +10,7 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 
 ## Features
 
-- **Ghost Text Completion** — Inline grey suggestion text based on history, command specs, and AI
+- **Ghost Text Completion** — Inline grey suggestion text; local suggestions (history + specs) appear instantly, AI suggestions refresh asynchronously after you stop typing
 - **Failure Recovery** — Suggests fix commands after the previous command fails (suggest only, never execute)
 - **Risk Detection** — Inline warnings for dangerous commands like `rm -rf`, `git push --force`, `chmod 777`
 - **Command Specs Completion** — Deterministic argument completion in TOML format, built-in for git/docker/npm/cargo/brew/curl/ssh
@@ -35,12 +35,14 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 Terminal (Ghostty / Kitty / WezTerm / Alacritty)
   └─ zsh (ZLE Widget)
        └─ Shell Plugin (awen.zsh)
+            │  Phase 1 (sync): skip_ai=true  → local results in <20ms
+            │  Phase 2 (async): skip_ai=false → AI result after idle delay
             │ Unix Socket
             └─ Daemon (Rust + tokio)
                  ├─ Context Engine (session / repo / git)
                  ├─ Layer 1: History (SQLite + nucleo) — < 5ms
                  ├─ Layer 1: Specs (TOML) — < 20ms
-                 ├─ Layer 2: AI (DeepSeek / Ollama) — timeout-bounded, optional
+                 ├─ Layer 2: AI (DeepSeek / Ollama) — async, never blocks input
                  ├─ Layer 2: Failure Recovery (pattern + AI)
                  ├─ Layer 2: Risk Detection (regex)
                  └─ Suggestion Arbitrator
@@ -185,6 +187,8 @@ warning = "This will force-execute, are you sure?"
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `AWEN_AI_DELAY` | `1` | Seconds to wait after typing stops before firing an AI request |
+| `AWEN_LOCAL_THROTTLE_MS` | `20` | Minimum ms between local suggestion requests (keystroke throttle) |
 | `AWEN_CAPTURE_STDERR` | `0` | Set to `1` to enable experimental stderr capture |
 | `AWEN_ENABLE_KEYBIND_OVERRIDE` | `1` | Set to `0` to disable Awen's keybinding overrides |
 | `DEEPSEEK_API_KEY` | — | DeepSeek API key (alternative to config file) |

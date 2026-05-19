@@ -203,7 +203,10 @@ mod tests {
         let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "cargo add tokio");
         assert_eq!(suggestion.source, SuggestionSource::Failure);
-        assert_eq!(suggestion.description.as_deref(), Some("Looks like `tokio` is missing"));
+        assert_eq!(
+            suggestion.description.as_deref(),
+            Some("Looks like `tokio` is missing")
+        );
         assert_eq!(hint.text, "Looks like `tokio` is missing");
     }
 
@@ -223,7 +226,10 @@ mod tests {
         assert!(result.is_some());
         let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "brew install ripgrep");
-        assert_eq!(suggestion.description.as_deref(), Some("Command `ripgrep` is not installed"));
+        assert_eq!(
+            suggestion.description.as_deref(),
+            Some("Command `ripgrep` is not installed")
+        );
         assert_eq!(hint.text, "Command `ripgrep` is not installed");
     }
 
@@ -243,7 +249,10 @@ mod tests {
         assert!(result.is_some());
         let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "lsof -i :3000");
-        assert_eq!(suggestion.description.as_deref(), Some("Port 3000 is already in use"));
+        assert_eq!(
+            suggestion.description.as_deref(),
+            Some("Port 3000 is already in use")
+        );
         assert_eq!(hint.text, "Port 3000 is already in use");
     }
 

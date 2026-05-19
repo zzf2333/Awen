@@ -10,6 +10,16 @@ typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
 
+# Async AI state
+typeset -g _AWEN_AI_FD=""
+typeset -g _AWEN_AI_PID=""
+typeset -g _AWEN_AI_SNAPSHOT=""
+typeset -g _AWEN_AI_SEQ=0
+typeset -g _AWEN_AI_ACTIVE_SEQ=0
+typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
+typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
+typeset -g _AWEN_LAST_LOCAL_MS=0
+
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
     local input="$1"
@@ -81,7 +91,7 @@ _awen_send_nc() {
     local request="$1"
     # Try socat first, fall back to direct zsh TCP
     if command -v socat &>/dev/null; then
-        echo "$request" | socat - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
+        echo "$request" | socat -T 0.1 - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
     else
         # Use zsh's built-in zsocket if available
         if zmodload zsh/net/socket 2>/dev/null; then
@@ -174,13 +184,18 @@ _awen_render_hint() {
     fi
 }
 
-_awen_suggest() {
-    if [[ -z "$BUFFER" || ! -S "$_AWEN_SOCKET" ]]; then
-        POSTDISPLAY=""
-        _AWEN_SUGGESTION=""
-        _awen_clear_hint
-        return
+_awen_now_ms() {
+    if [[ "$_AWEN_HAS_ZDATE" == "1" ]]; then
+        printf '%d' $(( ${EPOCHREALTIME//.} / 1000 ))
+    else
+        printf '%d' $(( $(date +%s) * 1000 ))
     fi
+}
+
+# Build JSON request for suggest
+# Args: $1=input $2=cursor $3=skip_ai ("true"/"false")
+_awen_build_request() {
+    local input="$1" cursor="$2" skip_ai="$3"
 
     local last_exit="${_AWEN_LAST_EXIT_CODE:-0}"
     local last_stderr=""
@@ -196,27 +211,26 @@ _awen_suggest() {
 
     local last_cmd="${_AWEN_LAST_COMMAND:-}"
 
-    # Build JSON request
-    local request
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-        request=$(jq -cn \
-            --arg input "$BUFFER" \
-            --argjson cursor "$CURSOR" \
+        jq -cn \
+            --arg input "$input" \
+            --argjson cursor "$cursor" \
             --arg cwd "$cwd" \
             --arg last_cmd "${last_cmd:-}" \
             --argjson exit_code "${last_exit:-0}" \
             --arg stderr "${last_stderr:-}" \
             --arg branch "${git_branch:-}" \
-            '{type: "suggest", input: $input, cursor_pos: $cursor, context: {
+            --argjson skip_ai "$skip_ai" \
+            '{type: "suggest", input: $input, cursor_pos: $cursor, skip_ai: $skip_ai, context: {
                 cwd: $cwd,
                 last_command: (if $last_cmd == "" then null else $last_cmd end),
                 last_exit_code: $exit_code,
                 last_stderr: (if $stderr == "" then null else $stderr end),
                 git_branch: (if $branch == "" then null else $branch end),
                 git_status: null, session_commands: [], env_hints: []
-            }}' 2>/dev/null)
+            }}' 2>/dev/null
     else
-        local esc_input=$(_awen_json_escape "$BUFFER")
+        local esc_input=$(_awen_json_escape "$input")
         local esc_cwd=$(_awen_json_escape "$cwd")
         local cmd_json="null"
         if [[ -n "$last_cmd" ]]; then
@@ -230,19 +244,21 @@ _awen_suggest() {
         if [[ -n "$git_branch" ]]; then
             branch_json="\"$(_awen_json_escape "$git_branch")\""
         fi
-        request=$(printf '{"type":"suggest","input":"%s","cursor_pos":%d,"context":{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}}' \
-            "$esc_input" "$CURSOR" "$esc_cwd" "$cmd_json" "${last_exit:-0}" "$stderr_json" "$branch_json")
+        printf '{"type":"suggest","input":"%s","cursor_pos":%d,"skip_ai":%s,"context":{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}}' \
+            "$esc_input" "$cursor" "$skip_ai" "$esc_cwd" "$cmd_json" "${last_exit:-0}" "$stderr_json" "$branch_json"
     fi
+}
 
-    local response
-    response=$(_awen_send_nc "$request")
+# Parse suggest response and apply to display
+# Args: $1=response JSON
+_awen_apply_response() {
+    local response="$1"
 
     if [[ -z "$response" ]]; then
         POSTDISPLAY=""
         return
     fi
 
-    # Parse response
     local suggestion_text=""
     local hint_text=""
     local warning_text=""
@@ -252,7 +268,6 @@ _awen_suggest() {
         hint_text=$(echo "$response" | jq -r '.hint.text // empty' 2>/dev/null)
         warning_text=$(echo "$response" | jq -r '.warning.text // empty' 2>/dev/null)
     else
-        # Fallback: manual parsing with escaped-quote handling
         if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
             local tmp="${response#*\"suggestions\":*\"text\":\"}"
             suggestion_text=$(_awen_extract_json_value "$tmp")
@@ -280,9 +295,103 @@ _awen_suggest() {
     _awen_render_hint
 }
 
+# Phase 1: Synchronous local-only suggest (<20ms)
+_awen_suggest_local() {
+    if [[ -z "$BUFFER" || ! -S "$_AWEN_SOCKET" ]]; then
+        POSTDISPLAY=""
+        _AWEN_SUGGESTION=""
+        _awen_clear_hint
+        _awen_cancel_pending_ai
+        return
+    fi
+
+    # Throttle: skip if called too soon after previous local request
+    local now_ms=$(_awen_now_ms)
+    local elapsed=$(( now_ms - _AWEN_LAST_LOCAL_MS ))
+    if (( elapsed < _AWEN_LOCAL_THROTTLE_MS )); then
+        _awen_schedule_ai
+        return
+    fi
+    _AWEN_LAST_LOCAL_MS=$now_ms
+
+    local request=$(_awen_build_request "$BUFFER" "$CURSOR" true)
+    local response
+    response=$(_awen_send_nc "$request")
+    _awen_apply_response "$response"
+
+    # Schedule async AI after rendering local results
+    _awen_schedule_ai
+}
+
+# Cancel any pending async AI request
+_awen_cancel_pending_ai() {
+    if [[ -n "$_AWEN_AI_FD" ]]; then
+        zle -F "$_AWEN_AI_FD" 2>/dev/null
+        exec {_AWEN_AI_FD}<&- 2>/dev/null
+        _AWEN_AI_FD=""
+    fi
+    if [[ -n "$_AWEN_AI_PID" ]]; then
+        kill "$_AWEN_AI_PID" 2>/dev/null
+        _AWEN_AI_PID=""
+    fi
+}
+
+# Phase 2: Schedule async AI request after AWEN_AI_DELAY
+_awen_schedule_ai() {
+    _awen_cancel_pending_ai
+
+    [[ ${#BUFFER} -lt 3 ]] && return
+    [[ ! -S "$_AWEN_SOCKET" ]] && return
+    # Async path requires socat (zsocket doesn't work in subshells)
+    command -v socat &>/dev/null || return
+
+    _AWEN_AI_SNAPSHOT="$BUFFER"
+    (( _AWEN_AI_SEQ++ ))
+    _AWEN_AI_ACTIVE_SEQ=$_AWEN_AI_SEQ
+
+    local request=$(_awen_build_request "$BUFFER" "$CURSOR" false)
+    local socket="$_AWEN_SOCKET"
+    local delay="$_AWEN_AI_DELAY"
+
+    exec {_AWEN_AI_FD}< <(
+        sleep "$delay"
+        echo "$request" | socat -T 3 - UNIX-CONNECT:"$socket" 2>/dev/null
+    )
+    _AWEN_AI_PID=$!
+
+    zle -F "$_AWEN_AI_FD" _awen_handle_ai_result
+}
+
+# Callback: async AI response arrived
+_awen_handle_ai_result() {
+    local fd="$1"
+    local response=""
+
+    if ! read -r response <&$fd 2>/dev/null; then
+        zle -F "$fd" 2>/dev/null
+        exec {fd}<&- 2>/dev/null
+        _AWEN_AI_FD=""
+        _AWEN_AI_PID=""
+        return
+    fi
+
+    zle -F "$fd" 2>/dev/null
+    exec {fd}<&- 2>/dev/null
+    _AWEN_AI_FD=""
+    _AWEN_AI_PID=""
+
+    # Discard stale results
+    [[ "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]] && return
+    [[ "$_AWEN_AI_ACTIVE_SEQ" != "$_AWEN_AI_SEQ" ]] && return
+
+    _awen_apply_response "$response"
+    zle -R
+}
+
 # Accept full ghost text suggestion
 _awen_accept() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
+        _awen_cancel_pending_ai
         BUFFER="$_AWEN_SUGGESTION"
         CURSOR=${#BUFFER}
         _AWEN_SUGGESTION=""
@@ -303,6 +412,7 @@ _awen_accept_word() {
         # Get next word (up to next space)
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
+            _awen_cancel_pending_ai
             BUFFER="$_AWEN_SUGGESTION"
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
@@ -319,6 +429,7 @@ _awen_accept_word() {
 # Dismiss suggestion
 _awen_dismiss() {
     if [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
+        _awen_cancel_pending_ai
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
@@ -390,12 +501,12 @@ _awen_preexec() {
 # Self-insert wrapper: trigger suggest after each keystroke
 _awen_self_insert() {
     zle .self-insert
-    _awen_suggest
+    _awen_suggest_local
 }
 
 _awen_backward_delete_char() {
     zle .backward-delete-char
-    _awen_suggest
+    _awen_suggest_local
 }
 
 # Initialize Awen
@@ -415,8 +526,15 @@ awen_init() {
         typeset -g _AWEN_HAS_JQ=0
     fi
 
-    # Cleanup stderr capture file on shell exit
-    trap 'rm -f "$_AWEN_LAST_STDERR_FILE" 2>/dev/null' EXIT
+    # Detect zsh/datetime for fast timestamp
+    if zmodload zsh/datetime 2>/dev/null; then
+        typeset -g _AWEN_HAS_ZDATE=1
+    else
+        typeset -g _AWEN_HAS_ZDATE=0
+    fi
+
+    # Cleanup on shell exit
+    trap '_awen_cancel_pending_ai; rm -f "$_AWEN_LAST_STDERR_FILE" 2>/dev/null' EXIT
 
     _awen_ensure_daemon
 
@@ -426,16 +544,17 @@ awen_init() {
     zle -N _awen_accept
     zle -N _awen_accept_word
     zle -N _awen_dismiss
-    zle -N _awen_suggest
+    zle -N _awen_suggest_local
+    zle -N _awen_handle_ai_result
 
     # Keybinding setup (disable with AWEN_ENABLE_KEYBIND_OVERRIDE=0)
     if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then
         bindkey -M main '\e[C' _awen_accept          # Right arrow
+        bindkey -M main '\eOC' _awen_accept          # Right arrow (application mode)
         bindkey -M main '\e[1;5C' _awen_accept_word  # Ctrl+Right
         bindkey -M main '\e[27;5;67~' _awen_accept_word  # Ctrl+Right (alternate)
         bindkey -M main '\e\e[C' _awen_accept_word   # Alt+Right (fallback)
         bindkey -M main '\e[Z' _awen_dismiss          # Shift+Tab dismiss
-        bindkey -M main '^[' _awen_dismiss            # Esc
 
         # Override self-insert to trigger suggestions on every keystroke
         local -a printable
