@@ -22,6 +22,16 @@ typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
 typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
 typeset -g _AWEN_LAST_LOCAL_MS=0
 
+# Menu state
+typeset -g  _AWEN_MENU_ACTIVE=0
+typeset -g  _AWEN_MENU_INDEX=1
+typeset -ga _AWEN_MENU_TEXTS=()
+typeset -ga _AWEN_MENU_SOURCES=()
+typeset -ga _AWEN_MENU_FULL_CMDS=()
+typeset -g  _AWEN_MENU_COUNT=0
+typeset -g  _AWEN_MENU_MAX="${AWEN_MENU_MAX_ITEMS:-5}"
+typeset -g  _AWEN_MENU_ENABLED="${AWEN_MENU_ENABLED:-1}"
+
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
     local input="$1"
@@ -102,15 +112,44 @@ _awen_send_nc() {
     fi
 }
 
+_awen_menu_reset() {
+    _AWEN_MENU_ACTIVE=0
+    _AWEN_MENU_INDEX=1
+    _AWEN_MENU_COUNT=0
+    _AWEN_MENU_TEXTS=()
+    _AWEN_MENU_SOURCES=()
+    _AWEN_MENU_FULL_CMDS=()
+}
+
 _awen_remove_ghost_highlight() {
     region_highlight=("${(@)region_highlight:#*$_AWEN_GHOST_STYLE}")
+    region_highlight=("${(@)region_highlight:#*standout*}")
+    region_highlight=("${(@)region_highlight:#*fg=245*}")
+    region_highlight=("${(@)region_highlight:#*fg=240*}")
     _AWEN_GHOST_HIGHLIGHT=""
 }
 
+_awen_reconstruct_full_cmd() {
+    local input="$1" suggestion="$2"
+    if [[ "$suggestion" == "$input"* ]]; then
+        printf '%s' "$suggestion"
+    else
+        local last_word="${input##* }"
+        if [[ -n "$last_word" && "$suggestion" == "$last_word"* ]]; then
+            printf '%s' "${input%$last_word}${suggestion}"
+        elif [[ "$input" == *" " ]]; then
+            printf '%s' "${input}${suggestion}"
+        else
+            printf '%s' "${input} ${suggestion}"
+        fi
+    fi
+}
+
 _awen_clear_ghost() {
-    if [[ -n "$_AWEN_SUGGESTION" ]]; then
+    if [[ -n "$_AWEN_SUGGESTION" ]] || (( _AWEN_MENU_ACTIVE )); then
         _AWEN_SUGGESTION=""
         _awen_remove_ghost_highlight
+        _awen_menu_reset
         POSTDISPLAY=""
         zle -R
     fi
@@ -132,30 +171,11 @@ _awen_render_ghost() {
         return
     fi
 
-    local input="$BUFFER"
-    local full_suggestion=""
-
-    # Reconstruct full command from suggestion
-    if [[ "$suggestion" == "$input"* ]]; then
-        # Full prefix match (e.g., history: "git checkout" starts with "git ch")
-        full_suggestion="$suggestion"
-    else
-        local last_word="${input##* }"
-        if [[ -n "$last_word" && "$suggestion" == "$last_word"* ]]; then
-            # Word completion (e.g., specs: "checkout" completes "ch")
-            full_suggestion="${input%$last_word}${suggestion}"
-        elif [[ "$input" == *" " ]]; then
-            # Input ends with space, append suggestion
-            full_suggestion="${input}${suggestion}"
-        else
-            # Append with space (e.g., AI: "pods" after "kubectl get")
-            full_suggestion="${input} ${suggestion}"
-        fi
-    fi
-
+    local full_suggestion
+    full_suggestion=$(_awen_reconstruct_full_cmd "$BUFFER" "$suggestion")
     _AWEN_SUGGESTION="$full_suggestion"
 
-    local ghost_part="${full_suggestion#$input}"
+    local ghost_part="${full_suggestion#$BUFFER}"
     if [[ -n "$ghost_part" ]]; then
         POSTDISPLAY="$ghost_part"
         _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
@@ -163,6 +183,93 @@ _awen_render_ghost() {
     else
         POSTDISPLAY=""
     fi
+}
+
+_awen_render_menu() {
+    _awen_remove_ghost_highlight
+
+    local input="$BUFFER"
+    local selected_full="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+    local ghost_part="${selected_full#$input}"
+
+    # Terminal height safety
+    local max_visible=$_AWEN_MENU_MAX
+    (( max_visible > LINES - 3 )) && max_visible=$(( LINES - 3 ))
+    (( max_visible < 1 )) && max_visible=1
+
+    # Scroll window around selected item
+    local scroll_start=1
+    if (( _AWEN_MENU_COUNT > max_visible )); then
+        if (( _AWEN_MENU_INDEX > max_visible )); then
+            scroll_start=$(( _AWEN_MENU_INDEX - max_visible + 1 ))
+        fi
+    fi
+    local scroll_end=$(( scroll_start + max_visible - 1 ))
+    (( scroll_end > _AWEN_MENU_COUNT )) && scroll_end=$_AWEN_MENU_COUNT
+
+    local pd=""
+    local -a highlights=()
+    local offset=$#BUFFER
+
+    # Ghost text
+    if [[ -n "$ghost_part" ]]; then
+        pd="$ghost_part"
+        highlights+=("$offset $(( offset + ${#ghost_part} )) $_AWEN_GHOST_STYLE")
+        (( offset += ${#ghost_part} ))
+    fi
+
+    # Menu items
+    local i
+    for (( i=scroll_start; i<=scroll_end; i++ )); do
+        local item_text="${_AWEN_MENU_TEXTS[$i]}"
+        local item_source="${_AWEN_MENU_SOURCES[$i]}"
+        local tag=""
+        case "$item_source" in
+            history) tag="[hist]" ;;
+            specs)   tag="[spec]" ;;
+            ai)      tag="[ai]"   ;;
+            failure) tag="[fix]"  ;;
+            *)       tag=""       ;;
+        esac
+
+        local line
+        if [[ -n "$tag" ]]; then
+            line=$'\n'"  ${item_text}  ${tag}"
+        else
+            line=$'\n'"  ${item_text}"
+        fi
+
+        pd+="$line"
+        local line_start=$(( offset + 1 ))
+        local line_end=$(( offset + ${#line} ))
+
+        if (( i == _AWEN_MENU_INDEX )); then
+            highlights+=("$line_start $line_end standout")
+        else
+            highlights+=("$line_start $line_end fg=245")
+        fi
+        (( offset += ${#line} ))
+    done
+
+    # Scroll indicators
+    local scroll_info=""
+    (( scroll_start > 1 )) && scroll_info+=" ↑"
+    (( scroll_end < _AWEN_MENU_COUNT )) && scroll_info+=" ↓"
+
+    # Footer
+    local footer=$'\n'"  ↑↓ navigate  ⏎ confirm  esc dismiss${scroll_info}"
+    pd+="$footer"
+    local footer_start=$(( offset + 1 ))
+    local footer_end=$(( offset + ${#footer} ))
+    highlights+=("$footer_start $footer_end fg=240")
+
+    POSTDISPLAY="$pd"
+    _AWEN_SUGGESTION="$selected_full"
+
+    local h
+    for h in "${highlights[@]}"; do
+        region_highlight+=("$h")
+    done
 }
 
 _awen_render_hint() {
@@ -249,25 +356,20 @@ _awen_apply_response() {
     local response="$1"
 
     if [[ -z "$response" ]]; then
+        _awen_menu_reset
         _awen_remove_ghost_highlight
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
         return
     fi
 
-    local suggestion_text=""
-    local hint_text=""
-    local warning_text=""
+    local hint_text="" warning_text=""
 
+    # Parse hint/warning
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-        suggestion_text=$(echo "$response" | jq -r '.suggestions[0].text // empty' 2>/dev/null)
         hint_text=$(echo "$response" | jq -r '.hint.text // empty' 2>/dev/null)
         warning_text=$(echo "$response" | jq -r '.warning.text // empty' 2>/dev/null)
     else
-        if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
-            local tmp="${response#*\"suggestions\":*\"text\":\"}"
-            suggestion_text=$(_awen_extract_json_value "$tmp")
-        fi
         if [[ "$response" == *'"hint":'*'"text":"'* ]]; then
             local tmp="${response#*\"hint\":*\"text\":\"}"
             hint_text=$(_awen_extract_json_value "$tmp")
@@ -281,9 +383,52 @@ _awen_apply_response() {
     _AWEN_WARNING="$warning_text"
     _AWEN_HINT="$hint_text"
 
-    if [[ -n "$suggestion_text" ]]; then
-        _awen_render_ghost "$suggestion_text"
+    # Parse all suggestions
+    _AWEN_MENU_TEXTS=()
+    _AWEN_MENU_SOURCES=()
+
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        local s_text s_source
+        while IFS=$'\t' read -r s_text s_source; do
+            [[ -z "$s_text" ]] && continue
+            _AWEN_MENU_TEXTS+=("$s_text")
+            _AWEN_MENU_SOURCES+=("$s_source")
+        done < <(echo "$response" | jq -r '.suggestions[] | "\(.text)\t\(.source)"' 2>/dev/null)
     else
+        # Fallback: first suggestion only (menu requires jq)
+        if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
+            local tmp="${response#*\"suggestions\":*\"text\":\"}"
+            local s_text=$(_awen_extract_json_value "$tmp")
+            if [[ -n "$s_text" ]]; then
+                _AWEN_MENU_TEXTS+=("$s_text")
+                local src_tmp="${response#*\"suggestions\":*\"source\":\"}"
+                local s_source=$(_awen_extract_json_value "$src_tmp")
+                _AWEN_MENU_SOURCES+=("${s_source:-history}")
+            fi
+        fi
+    fi
+
+    local count=${#_AWEN_MENU_TEXTS[@]}
+
+    # Reconstruct full commands
+    _AWEN_MENU_FULL_CMDS=()
+    local input="$BUFFER"
+    local i
+    for (( i=1; i<=count; i++ )); do
+        _AWEN_MENU_FULL_CMDS+=("$(_awen_reconstruct_full_cmd "$input" "${_AWEN_MENU_TEXTS[$i]}")")
+    done
+
+    if [[ "$_AWEN_MENU_ENABLED" == "1" && $count -ge 2 ]]; then
+        _AWEN_MENU_COUNT=$count
+        _AWEN_MENU_INDEX=1
+        _AWEN_MENU_ACTIVE=1
+        _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[1]}"
+        _awen_render_menu
+    elif [[ $count -ge 1 ]]; then
+        _awen_menu_reset
+        _awen_render_ghost "${_AWEN_MENU_TEXTS[1]}"
+    else
+        _awen_menu_reset
         _awen_remove_ghost_highlight
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
@@ -396,13 +541,44 @@ _awen_apply_ai() {
         CURSOR=${#BUFFER}
     fi
 
+    # Remember current selection to preserve across refresh
+    local prev_selected=""
+    if (( _AWEN_MENU_ACTIVE )); then
+        prev_selected="${_AWEN_MENU_TEXTS[$_AWEN_MENU_INDEX]}"
+    fi
+
     _awen_apply_response "$response"
+
+    # Restore selection if same item still exists
+    if [[ -n "$prev_selected" ]] && (( _AWEN_MENU_ACTIVE )); then
+        local i
+        for (( i=1; i<=${#_AWEN_MENU_TEXTS[@]}; i++ )); do
+            if [[ "${_AWEN_MENU_TEXTS[$i]}" == "$prev_selected" ]]; then
+                _AWEN_MENU_INDEX=$i
+                _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[$i]}"
+                _awen_render_menu
+                break
+            fi
+        done
+    fi
+
     zle -R
 }
 
 # Accept full ghost text suggestion
 _awen_accept() {
-    if [[ -n "$_AWEN_SUGGESTION" ]]; then
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_cancel_pending_ai
+        BUFFER="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+        CURSOR=${#BUFFER}
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        _AWEN_SUGGESTION=""
+        POSTDISPLAY=""
+        _awen_clear_hint
+        zle -M ""
+        zle -R
+    elif [[ -n "$_AWEN_SUGGESTION" ]]; then
         _awen_cancel_pending_ai
         _awen_remove_ghost_highlight
         BUFFER="$_AWEN_SUGGESTION"
@@ -412,18 +588,34 @@ _awen_accept() {
         _awen_clear_hint
         zle -R
     else
-        # Default right arrow behavior
         zle forward-char
     fi
 }
 
 # Accept next word from ghost text
 _awen_accept_word() {
-    if [[ -n "$_AWEN_SUGGESTION" ]]; then
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_cancel_pending_ai
+        local selected="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        local input="$BUFFER"
+        local remaining="${selected#$input}"
+        local next_word="${remaining%% *}"
+        if [[ "$next_word" == "$remaining" ]]; then
+            BUFFER="$selected"
+            _AWEN_SUGGESTION=""
+            POSTDISPLAY=""
+        else
+            BUFFER="${input}${next_word} "
+            _AWEN_SUGGESTION="$selected"
+            _awen_render_ghost "$selected"
+        fi
+        CURSOR=${#BUFFER}
+        zle -R
+    elif [[ -n "$_AWEN_SUGGESTION" ]]; then
         local input="$BUFFER"
         local remaining="${_AWEN_SUGGESTION#$input}"
-
-        # Get next word (up to next space)
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
             _awen_cancel_pending_ai
@@ -444,16 +636,16 @@ _awen_accept_word() {
 
 # Dismiss suggestion
 _awen_dismiss() {
-    if [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
+    if (( _AWEN_MENU_ACTIVE )) || [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
         _awen_cancel_pending_ai
         _awen_remove_ghost_highlight
+        _awen_menu_reset
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
         zle -M ""
         zle -R
     else
-        # Default Esc behavior (vi mode or cancel)
         zle send-break
     fi
 }
@@ -517,13 +709,63 @@ _awen_preexec() {
 
 # Self-insert wrapper: trigger suggest after each keystroke
 _awen_self_insert() {
+    (( _AWEN_MENU_ACTIVE )) && _awen_menu_reset
     zle .self-insert
     _awen_suggest_local
 }
 
 _awen_backward_delete_char() {
+    (( _AWEN_MENU_ACTIVE )) && _awen_menu_reset
     zle .backward-delete-char
     _awen_suggest_local
+}
+
+# Menu navigation widgets
+_awen_menu_up() {
+    if (( _AWEN_MENU_ACTIVE )); then
+        if (( _AWEN_MENU_INDEX > 1 )); then
+            (( _AWEN_MENU_INDEX-- ))
+        else
+            _AWEN_MENU_INDEX=$_AWEN_MENU_COUNT
+        fi
+        _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+        _awen_render_menu
+        zle -R
+    else
+        zle up-line-or-history
+    fi
+}
+
+_awen_menu_down() {
+    if (( _AWEN_MENU_ACTIVE )); then
+        if (( _AWEN_MENU_INDEX < _AWEN_MENU_COUNT )); then
+            (( _AWEN_MENU_INDEX++ ))
+        else
+            _AWEN_MENU_INDEX=1
+        fi
+        _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+        _awen_render_menu
+        zle -R
+    else
+        zle down-line-or-history
+    fi
+}
+
+_awen_menu_accept() {
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_cancel_pending_ai
+        BUFFER="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
+        CURSOR=${#BUFFER}
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        _AWEN_SUGGESTION=""
+        POSTDISPLAY=""
+        _awen_clear_hint
+        zle -M ""
+        zle -R
+    else
+        zle accept-line
+    fi
 }
 
 # Initialize Awen
@@ -563,6 +805,9 @@ awen_init() {
     zle -N _awen_dismiss
     zle -N _awen_suggest_local
     zle -N _awen_apply_ai
+    zle -N _awen_menu_up
+    zle -N _awen_menu_down
+    zle -N _awen_menu_accept
 
     # Keybinding setup (disable with AWEN_ENABLE_KEYBIND_OVERRIDE=0)
     if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then
@@ -572,6 +817,13 @@ awen_init() {
         bindkey -M main '\e[27;5;67~' _awen_accept_word  # Ctrl+Right (alternate)
         bindkey -M main '\e\e[C' _awen_accept_word   # Alt+Right (fallback)
         bindkey -M main '\e[Z' _awen_dismiss          # Shift+Tab dismiss
+
+        # Menu navigation (fallthrough to defaults when menu inactive)
+        bindkey -M main '\e[A' _awen_menu_up           # Up arrow
+        bindkey -M main '\eOA' _awen_menu_up           # Up arrow (application mode)
+        bindkey -M main '\e[B' _awen_menu_down         # Down arrow
+        bindkey -M main '\eOB' _awen_menu_down         # Down arrow (application mode)
+        bindkey -M main '^M' _awen_menu_accept         # Enter
 
         # Override self-insert to trigger suggestions on every keystroke
         local -a printable

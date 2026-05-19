@@ -119,6 +119,49 @@ if command -v jq &>/dev/null; then
 fi
 
 # ============================================================
+# Test: _awen_reconstruct_full_cmd
+# ============================================================
+
+assert_eq "reconstruct: full prefix match" \
+    "git checkout main" \
+    "$(_awen_reconstruct_full_cmd "git ch" "git checkout main")"
+
+assert_eq "reconstruct: word completion" \
+    "git checkout" \
+    "$(_awen_reconstruct_full_cmd "git ch" "checkout")"
+
+assert_eq "reconstruct: input ends with space" \
+    "kubectl get pods" \
+    "$(_awen_reconstruct_full_cmd "kubectl get " "pods")"
+
+assert_eq "reconstruct: append with space" \
+    "kubectl get pods" \
+    "$(_awen_reconstruct_full_cmd "kubectl get" "pods")"
+
+assert_eq "reconstruct: exact match" \
+    "ls" \
+    "$(_awen_reconstruct_full_cmd "ls" "ls")"
+
+# ============================================================
+# Test: _awen_menu_reset
+# ============================================================
+
+_AWEN_MENU_ACTIVE=1
+_AWEN_MENU_INDEX=3
+_AWEN_MENU_COUNT=5
+_AWEN_MENU_TEXTS=("a" "b" "c")
+_AWEN_MENU_SOURCES=("history" "specs" "ai")
+_AWEN_MENU_FULL_CMDS=("git a" "git b" "git c")
+_awen_menu_reset
+
+assert_eq "menu_reset: active" "0" "$_AWEN_MENU_ACTIVE"
+assert_eq "menu_reset: index" "1" "$_AWEN_MENU_INDEX"
+assert_eq "menu_reset: count" "0" "$_AWEN_MENU_COUNT"
+assert_eq "menu_reset: texts empty" "0" "${#_AWEN_MENU_TEXTS[@]}"
+assert_eq "menu_reset: sources empty" "0" "${#_AWEN_MENU_SOURCES[@]}"
+assert_eq "menu_reset: full_cmds empty" "0" "${#_AWEN_MENU_FULL_CMDS[@]}"
+
+# ============================================================
 # Test: AWEN_CAPTURE_STDERR defaults off
 # ============================================================
 

@@ -27,7 +27,7 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 | AI Completion (DeepSeek / Ollama) | Experimental |
 | stderr Capture | Experimental (off by default) |
 | Command Explanation | Planned |
-| Dropdown Menu | Planned |
+| Dropdown Menu | Experimental |
 
 ## Architecture
 
