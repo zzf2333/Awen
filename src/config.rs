@@ -65,7 +65,7 @@ impl Default for AiConfig {
             provider: "deepseek".into(),
             debounce_ms: 300,
             timeout_ms: 2000,
-            max_tokens: 60,
+            max_tokens: 256,
             cache_ttl_minutes: 30,
             deepseek: DeepSeekConfig::default(),
             ollama: OllamaConfig::default(),

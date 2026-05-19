@@ -96,10 +96,18 @@ impl AiProvider for DeepSeekProvider {
             .await
             .map_err(|e| AiError::ParseFailed(e.to_string()))?;
 
-        json["choices"][0]["message"]["content"]
+        tracing::debug!("DeepSeek response: {}", json);
+
+        let content = json["choices"][0]["message"]["content"]
             .as_str()
             .map(|s| s.trim().to_string())
-            .ok_or_else(|| AiError::ParseFailed("no content in response".into()))
+            .unwrap_or_default();
+
+        if !content.is_empty() {
+            return Ok(content);
+        }
+
+        Err(AiError::ParseFailed("empty content in response".into()))
     }
 }
 

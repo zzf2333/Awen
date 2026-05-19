@@ -73,23 +73,24 @@ impl FailureLayer {
         for pattern in &self.patterns {
             if let Some(caps) = pattern.regex.captures(stderr) {
                 let mut suggestion_text = pattern.suggestion_template.clone();
+                let mut description_text = pattern.description.clone();
                 for i in 1..caps.len() {
                     if let Some(m) = caps.get(i) {
-                        suggestion_text = suggestion_text.replace(&format!("{{{i}}}"), m.as_str());
+                        let placeholder = format!("{{{i}}}");
+                        suggestion_text = suggestion_text.replace(&placeholder, m.as_str());
+                        description_text = description_text.replace(&placeholder, m.as_str());
                     }
                 }
-
-                let hint_text = pattern.description.to_string();
 
                 return Some((
                     Suggestion {
                         text: suggestion_text,
                         source: SuggestionSource::Failure,
                         confidence: 0.95,
-                        description: Some(pattern.description.clone()),
+                        description: Some(description_text.clone()),
                     },
                     Hint {
-                        text: hint_text,
+                        text: description_text,
                         kind: HintKind::FailureRecovery,
                     },
                 ));
@@ -199,9 +200,11 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("error: cannot find crate `tokio`", 1);
         assert!(result.is_some());
-        let (suggestion, _hint) = result.unwrap();
+        let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "cargo add tokio");
         assert_eq!(suggestion.source, SuggestionSource::Failure);
+        assert_eq!(suggestion.description.as_deref(), Some("Looks like `tokio` is missing"));
+        assert_eq!(hint.text, "Looks like `tokio` is missing");
     }
 
     #[test]
@@ -218,8 +221,10 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("zsh: command not found: ripgrep", 127);
         assert!(result.is_some());
-        let (suggestion, _) = result.unwrap();
+        let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "brew install ripgrep");
+        assert_eq!(suggestion.description.as_deref(), Some("Command `ripgrep` is not installed"));
+        assert_eq!(hint.text, "Command `ripgrep` is not installed");
     }
 
     #[test]
@@ -236,8 +241,10 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("Error: port 3000 already in use", 1);
         assert!(result.is_some());
-        let (suggestion, _) = result.unwrap();
+        let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "lsof -i :3000");
+        assert_eq!(suggestion.description.as_deref(), Some("Port 3000 is already in use"));
+        assert_eq!(hint.text, "Port 3000 is already in use");
     }
 
     #[test]

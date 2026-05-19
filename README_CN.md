@@ -115,7 +115,7 @@ awen context   # 查看当前上下文
 enabled = true                  # 开关 AI 补全
 provider = "deepseek"           # deepseek | ollama
 debounce_ms = 300               # 停止输入后触发 AI 的延迟
-max_tokens = 60                 # AI 最大生成 token 数
+max_tokens = 256                # AI 最大生成 token 数（推理模型需要更多）
 
 [ai.deepseek]
 api_key = ""                    # 或设置 DEEPSEEK_API_KEY 环境变量
