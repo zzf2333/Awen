@@ -218,6 +218,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         mut response,
         ai_provider,
         max_tokens,
+        timeout_ms,
         stderr_max_chars,
         has_warning,
         debounce_ms,
@@ -255,6 +256,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
         let ai_provider = state.ai_provider.clone();
         let max_tokens = state.config.ai.max_tokens;
+        let timeout_ms = state.config.ai.timeout_ms;
         let stderr_max_chars = state.config.context.stderr_max_chars;
         let debounce_ms = state.config.ai.debounce_ms;
         let last_ai_request_at = state.last_ai_request_at;
@@ -263,6 +265,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             response,
             ai_provider,
             max_tokens,
+            timeout_ms,
             stderr_max_chars,
             has_warning,
             debounce_ms,
@@ -290,7 +293,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             let prompt = ai::build_prompt(&req.input, &ctx);
 
             match tokio::time::timeout(
-                std::time::Duration::from_millis(500),
+                std::time::Duration::from_millis(timeout_ms),
                 provider.complete(&prompt, max_tokens),
             )
             .await
@@ -298,13 +301,15 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
                 Ok(Ok(ai_response)) => {
                     if let Some(suggestion) = ai::parse_ai_suggestion(&req.input, &ai_response) {
                         Arbitrator::merge_ai_suggestion(&mut response, suggestion);
+                    } else {
+                        tracing::debug!("AI response rejected: {:?}", ai_response);
                     }
                 }
                 Ok(Err(e)) => {
                     tracing::debug!("AI completion error: {e}");
                 }
                 Err(_) => {
-                    tracing::debug!("AI completion timed out");
+                    tracing::debug!("AI completion timed out ({}ms)", timeout_ms);
                 }
             }
 

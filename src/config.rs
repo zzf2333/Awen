@@ -16,6 +16,7 @@ pub struct AiConfig {
     pub enabled: bool,
     pub provider: String,
     pub debounce_ms: u64,
+    pub timeout_ms: u64,
     pub max_tokens: u32,
     pub cache_ttl_minutes: u32,
     pub deepseek: DeepSeekConfig,
@@ -63,6 +64,7 @@ impl Default for AiConfig {
             enabled: true,
             provider: "deepseek".into(),
             debounce_ms: 300,
+            timeout_ms: 2000,
             max_tokens: 60,
             cache_ttl_minutes: 30,
             deepseek: DeepSeekConfig::default(),
@@ -115,14 +117,24 @@ impl Default for UiConfig {
 }
 
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.config"))
+    std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("~"))
+                .join(".config")
+        })
         .join("awen")
 }
 
 pub fn data_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.local/share"))
+    std::env::var("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("~"))
+                .join(".local/share")
+        })
         .join("awen")
 }
 
