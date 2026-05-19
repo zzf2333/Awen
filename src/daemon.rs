@@ -23,14 +23,12 @@ struct DaemonState {
     config: AwenConfig,
     start_time: std::time::Instant,
     last_ai_request_at: Option<std::time::Instant>,
-    last_ai_input: Option<String>,
 }
 
 fn should_request_ai(
     input: &str,
     has_warning: bool,
     max_local_confidence: f64,
-    last_ai_input: Option<&str>,
     last_ai_request_at: Option<std::time::Instant>,
     debounce_ms: u64,
 ) -> bool {
@@ -45,7 +43,7 @@ fn should_request_ai(
     }
     if let Some(last_at) = last_ai_request_at {
         let elapsed = last_at.elapsed().as_millis() as u64;
-        if elapsed < debounce_ms && last_ai_input == Some(input) {
+        if elapsed < debounce_ms {
             return false;
         }
     }
@@ -109,7 +107,6 @@ pub async fn run_on_paths(config: AwenConfig, paths: &DaemonPaths) {
         config: config.clone(),
         start_time: std::time::Instant::now(),
         last_ai_request_at: None,
-        last_ai_input: None,
     }));
 
     let listener = match UnixListener::bind(&paths.socket) {
@@ -216,7 +213,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         stderr_max_chars,
         has_warning,
         debounce_ms,
-        last_ai_input,
         last_ai_request_at,
     ) = {
         let mut state = state.lock().await;
@@ -253,7 +249,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         let max_tokens = state.config.ai.max_tokens;
         let stderr_max_chars = state.config.context.stderr_max_chars;
         let debounce_ms = state.config.ai.debounce_ms;
-        let last_ai_input = state.last_ai_input.as_deref().map(String::from);
         let last_ai_request_at = state.last_ai_request_at;
 
         (
@@ -263,7 +258,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             stderr_max_chars,
             has_warning,
             debounce_ms,
-            last_ai_input,
             last_ai_request_at,
         )
     };
@@ -279,7 +273,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             &req.input,
             has_warning,
             max_local_confidence,
-            last_ai_input.as_deref(),
             last_ai_request_at,
             debounce_ms,
         ) {
@@ -309,7 +302,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
 
             let mut state = state.lock().await;
             state.last_ai_request_at = Some(std::time::Instant::now());
-            state.last_ai_input = Some(req.input.clone());
         }
     }
 
@@ -429,43 +421,35 @@ mod tests {
 
     #[test]
     fn test_should_request_ai_short_input() {
-        assert!(!should_request_ai("gi", false, 0.0, None, None, 300));
-        assert!(!should_request_ai("ab", false, 0.0, None, None, 300));
+        assert!(!should_request_ai("gi", false, 0.0, None, 300));
+        assert!(!should_request_ai("ab", false, 0.0, None, 300));
     }
 
     #[test]
     fn test_should_request_ai_warning_present() {
-        assert!(!should_request_ai("rm -rf /", true, 0.0, None, None, 300));
+        assert!(!should_request_ai("rm -rf /", true, 0.0, None, 300));
     }
 
     #[test]
     fn test_should_request_ai_high_confidence() {
-        assert!(!should_request_ai(
-            "git checkout",
-            false,
-            0.95,
-            None,
-            None,
-            300
-        ));
-        assert!(!should_request_ai(
-            "git checkout",
-            false,
-            0.9,
-            None,
-            None,
-            300
-        ));
+        assert!(!should_request_ai("git checkout", false, 0.95, None, 300));
+        assert!(!should_request_ai("git checkout", false, 0.9, None, 300));
     }
 
     #[test]
-    fn test_should_request_ai_debounce_same_input() {
+    fn test_should_request_ai_debounce() {
         let recent = std::time::Instant::now();
         assert!(!should_request_ai(
             "docker run",
             false,
             0.0,
-            Some("docker run"),
+            Some(recent),
+            300,
+        ));
+        assert!(!should_request_ai(
+            "cargo build",
+            false,
+            0.0,
             Some(recent),
             300,
         ));
@@ -473,22 +457,7 @@ mod tests {
 
     #[test]
     fn test_should_request_ai_happy_path() {
-        assert!(should_request_ai("docker run", false, 0.5, None, None, 300));
-        assert!(should_request_ai(
-            "git checkout",
-            false,
-            0.89,
-            None,
-            None,
-            300
-        ));
-        assert!(should_request_ai(
-            "cargo build",
-            false,
-            0.0,
-            Some("cargo test"),
-            Some(std::time::Instant::now()),
-            300,
-        ));
+        assert!(should_request_ai("docker run", false, 0.5, None, 300));
+        assert!(should_request_ai("git checkout", false, 0.89, None, 300));
     }
 }

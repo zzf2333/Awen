@@ -29,3 +29,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check install.sh
         run: shellcheck install.sh
+      - name: Check zsh plugin syntax
+        run: zsh -n plugin/awen.zsh

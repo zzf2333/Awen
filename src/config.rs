@@ -138,7 +138,8 @@ pub fn socket_path() -> PathBuf {
 }
 
 pub fn pid_path() -> PathBuf {
-    runtime_dir().join("awen.pid")
+    let uid = unsafe { libc::getuid() };
+    runtime_dir().join(format!("awen-{uid}.pid"))
 }
 
 pub fn log_path() -> PathBuf {

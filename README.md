@@ -23,7 +23,7 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 |---------|--------|
 | Ghost Text (History + Specs) | **Stable** |
 | Risk Detection | **Stable** |
-| Failure Recovery (local patterns) | **Stable** |
+| Failure Recovery (local patterns) | Experimental (depends on stderr capture) |
 | AI Completion (DeepSeek / Ollama) | Experimental |
 | stderr Capture | Experimental (off by default) |
 | Command Explanation | Planned |
@@ -40,7 +40,7 @@ Terminal (Ghostty / Kitty / WezTerm / Alacritty)
                  ├─ Context Engine (session / repo / git)
                  ├─ Layer 1: History (SQLite + nucleo) — < 5ms
                  ├─ Layer 1: Specs (TOML) — < 20ms
-                 ├─ Layer 2: AI (DeepSeek / Ollama) — async
+                 ├─ Layer 2: AI (DeepSeek / Ollama) — timeout-bounded, optional
                  ├─ Layer 2: Failure Recovery (pattern + AI)
                  ├─ Layer 2: Risk Detection (regex)
                  └─ Suggestion Arbitrator
