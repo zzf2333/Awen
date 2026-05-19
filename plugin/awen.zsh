@@ -431,7 +431,7 @@ awen_init() {
         printable=({a..z} {A..Z} {0..9} ' ' '-' '_' '.' '/' '~' ':' '=' '+' '@' ',' ';' '!' '?' '#' '$' '%' '^' '&' '*' '(' ')' '[' ']' '{' '}' '<' '>' '|' "'" '"' '`' '\\')
         local key
         for key in "${printable[@]}"; do
-            bindkey -M main "$key" _awen_self_insert
+            bindkey -M main -- "$key" _awen_self_insert
         done
 
         # Backspace also triggers re-suggest
