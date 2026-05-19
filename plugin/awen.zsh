@@ -373,17 +373,21 @@ _awen_apply_response() {
             _AWEN_MENU_SOURCES+=("$s_source")
         done < <(echo "$response" | jq -r '.suggestions[] | "\(.text)\t\(.source)"' 2>/dev/null)
     else
-        # Fallback: first suggestion only (menu requires jq)
-        if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
-            local tmp="${response#*\"suggestions\":*\"text\":\"}"
-            local s_text=$(_awen_extract_json_value "$tmp")
+        local _remaining="${response#*\"suggestions\":\[}"
+        while [[ "$_remaining" == *'"text":"'* ]]; do
+            local _after_text="${_remaining#*\"text\":\"}"
+            local s_text=$(_awen_extract_json_value "$_after_text")
+            local s_source="history"
+            if [[ "$_remaining" == *'"source":"'* ]]; then
+                local _after_src="${_remaining#*\"source\":\"}"
+                s_source=$(_awen_extract_json_value "$_after_src")
+            fi
             if [[ -n "$s_text" ]]; then
                 _AWEN_MENU_TEXTS+=("$s_text")
-                local src_tmp="${response#*\"suggestions\":*\"source\":\"}"
-                local s_source=$(_awen_extract_json_value "$src_tmp")
                 _AWEN_MENU_SOURCES+=("${s_source:-history}")
             fi
-        fi
+            _remaining="${_after_text#*\}}"
+        done
     fi
 
     local count=${#_AWEN_MENU_TEXTS[@]}
@@ -718,6 +722,12 @@ _awen_menu_up() {
         _awen_render_menu
         zle -R
     else
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        POSTDISPLAY=""
+        _AWEN_SUGGESTION=""
+        _awen_clear_hint
+        _awen_cancel_pending_ai
         zle up-line-or-history
     fi
 }
@@ -733,6 +743,12 @@ _awen_menu_down() {
         _awen_render_menu
         zle -R
     else
+        _awen_remove_ghost_highlight
+        _awen_menu_reset
+        POSTDISPLAY=""
+        _AWEN_SUGGESTION=""
+        _awen_clear_hint
+        _awen_cancel_pending_ai
         zle down-line-or-history
     fi
 }

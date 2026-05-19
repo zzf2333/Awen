@@ -162,6 +162,39 @@ assert_eq "menu_reset: sources empty" "0" "${#_AWEN_MENU_SOURCES[@]}"
 assert_eq "menu_reset: full_cmds empty" "0" "${#_AWEN_MENU_FULL_CMDS[@]}"
 
 # ============================================================
+# Test: fallback multi-suggestion parsing (no jq)
+# ============================================================
+
+_AWEN_HAS_JQ=0
+_AWEN_MENU_TEXTS=()
+_AWEN_MENU_SOURCES=()
+
+_fb_response='{"type":"suggest","suggestions":[{"text":"cd /tmp","source":"history","confidence":1.0},{"text":"cd ~","source":"specs","confidence":0.8},{"text":"clone","source":"ai","confidence":0.5}]}'
+_remaining="${_fb_response#*\"suggestions\":\[}"
+while [[ "$_remaining" == *'"text":"'* ]]; do
+    _after_text="${_remaining#*\"text\":\"}"
+    _s_text=$(_awen_extract_json_value "$_after_text")
+    _s_source="history"
+    if [[ "$_remaining" == *'"source":"'* ]]; then
+        _after_src="${_remaining#*\"source\":\"}"
+        _s_source=$(_awen_extract_json_value "$_after_src")
+    fi
+    if [[ -n "$_s_text" ]]; then
+        _AWEN_MENU_TEXTS+=("$_s_text")
+        _AWEN_MENU_SOURCES+=("${_s_source:-history}")
+    fi
+    _remaining="${_after_text#*\}}"
+done
+
+assert_eq "fallback multi: count" "3" "${#_AWEN_MENU_TEXTS[@]}"
+assert_eq "fallback multi: text 1" "cd /tmp" "${_AWEN_MENU_TEXTS[1]}"
+assert_eq "fallback multi: text 2" "cd ~" "${_AWEN_MENU_TEXTS[2]}"
+assert_eq "fallback multi: text 3" "clone" "${_AWEN_MENU_TEXTS[3]}"
+assert_eq "fallback multi: source 1" "history" "${_AWEN_MENU_SOURCES[1]}"
+assert_eq "fallback multi: source 2" "specs" "${_AWEN_MENU_SOURCES[2]}"
+assert_eq "fallback multi: source 3" "ai" "${_AWEN_MENU_SOURCES[3]}"
+
+# ============================================================
 # Test: AWEN_CAPTURE_STDERR defaults off
 # ============================================================
 
