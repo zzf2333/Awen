@@ -234,16 +234,20 @@ async fn test_suggest_specs_completion() {
                 "should get specs suggestions for 'git ch'"
             );
             let has_checkout = s.suggestions.iter().any(|sg| sg.text.contains("checkout"));
-            let has_cherry_pick = s.suggestions.iter().any(|sg| sg.text.contains("cherry-pick"));
+            let has_cherry_pick = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.text.contains("cherry-pick"));
             assert!(
                 has_checkout || has_cherry_pick,
                 "should suggest git checkout or cherry-pick, got: {:?}",
                 s.suggestions.iter().map(|sg| &sg.text).collect::<Vec<_>>()
             );
-            assert!(s
-                .suggestions
-                .iter()
-                .all(|sg| sg.source == SuggestionSource::Specs));
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source == SuggestionSource::Specs)
+            );
         }
         other => panic!("expected Suggest response, got: {other:?}"),
     }
@@ -295,10 +299,7 @@ async fn test_suggest_history_after_record() {
                 "should get history suggestions after recording commands, got: {:?}",
                 s.suggestions
             );
-            let has_compose = s
-                .suggestions
-                .iter()
-                .any(|sg| sg.text.contains("compose"));
+            let has_compose = s.suggestions.iter().any(|sg| sg.text.contains("compose"));
             assert!(
                 has_compose,
                 "history should contain 'docker compose up -d', got: {:?}",
@@ -352,10 +353,7 @@ async fn test_suggest_failure_recovery() {
                 "failure should suggest 'cargo add tokio', got: {:?}",
                 s.suggestions.iter().map(|sg| &sg.text).collect::<Vec<_>>()
             );
-            assert!(
-                s.hint.is_some(),
-                "should have a failure recovery hint"
-            );
+            assert!(s.hint.is_some(), "should have a failure recovery hint");
         }
         other => panic!("expected Suggest response, got: {other:?}"),
     }
@@ -392,7 +390,9 @@ async fn test_suggest_risk_warning() {
             );
             let warning_text = s.warning.unwrap().text.to_lowercase();
             assert!(
-                warning_text.contains("delete") || warning_text.contains("rm") || warning_text.contains("危"),
+                warning_text.contains("delete")
+                    || warning_text.contains("rm")
+                    || warning_text.contains("危"),
                 "warning should mention danger, got: {warning_text}"
             );
         }
@@ -488,7 +488,10 @@ async fn test_full_session_flow() {
     // 3. history count 增长
     let resp = daemon.send(&Request::Status).await;
     match &resp {
-        Response::Status(s) => assert!(s.history_count >= 3, "should have at least 3 history entries"),
+        Response::Status(s) => assert!(
+            s.history_count >= 3,
+            "should have at least 3 history entries"
+        ),
         other => panic!("expected Status, got: {other:?}"),
     }
 
@@ -513,7 +516,11 @@ async fn test_full_session_flow() {
             last_stderr: Some(r#"npm ERR! Missing script: "test""#.into()),
             git_branch: None,
             git_status: None,
-            session_commands: vec!["npm install".into(), "npm run dev".into(), "npm test".into()],
+            session_commands: vec![
+                "npm install".into(),
+                "npm run dev".into(),
+                "npm test".into(),
+            ],
             env_hints: vec![],
         },
         timestamp: None,
@@ -521,8 +528,14 @@ async fn test_full_session_flow() {
     let resp = daemon.send(&req).await;
     match &resp {
         Response::Suggest(s) => {
-            let has_failure = s.suggestions.iter().any(|sg| sg.source == SuggestionSource::Failure);
-            assert!(has_failure, "should suggest failure recovery after npm test failure");
+            let has_failure = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Failure);
+            assert!(
+                has_failure,
+                "should suggest failure recovery after npm test failure"
+            );
             assert!(s.hint.is_some(), "should have failure hint");
         }
         other => panic!("expected Suggest, got: {other:?}"),
@@ -547,7 +560,10 @@ async fn test_full_session_flow() {
     let resp = daemon.send(&req).await;
     match &resp {
         Response::Suggest(s) => {
-            assert!(!s.suggestions.is_empty(), "should have suggestions for 'npm '");
+            assert!(
+                !s.suggestions.is_empty(),
+                "should have suggestions for 'npm '"
+            );
             let sources: Vec<_> = s.suggestions.iter().map(|sg| sg.source).collect();
             let has_specs = sources.contains(&SuggestionSource::Specs);
             let has_history = sources.contains(&SuggestionSource::History);
@@ -615,6 +631,118 @@ async fn test_invalid_json_request() {
             );
         }
         other => panic!("expected Error response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+// ============================================================
+// Security tests
+// ============================================================
+
+#[tokio::test]
+async fn test_record_sensitive_command_skipped() {
+    let daemon = TestDaemon::start().await;
+
+    let initial_status = daemon.send(&Request::Status).await;
+    let initial_count = match initial_status {
+        Response::Status(s) => s.history_count,
+        _ => panic!("expected Status"),
+    };
+
+    daemon
+        .send(&Request::Record(RecordCommandRequest {
+            command: "docker login registry.io -u user -p secret123".into(),
+            exit_code: 0,
+            stderr: None,
+            cwd: "/tmp".into(),
+            duration_ms: None,
+        }))
+        .await;
+
+    let status = daemon.send(&Request::Status).await;
+    match status {
+        Response::Status(s) => {
+            assert_eq!(
+                s.history_count, initial_count,
+                "sensitive command should not be recorded"
+            );
+        }
+        other => panic!("expected Status, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_suggest_with_sensitive_context() {
+    let daemon = TestDaemon::start().await;
+
+    let response = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "git status".into(),
+            cursor_pos: 10,
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: Some(
+                    "curl -H 'Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz12345'".into(),
+                ),
+                last_exit_code: Some(1),
+                last_stderr: Some("error: token sk-abcdefghijklmnopqrstuvwxyz12345 invalid".into()),
+                git_branch: Some("main".into()),
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        }))
+        .await;
+
+    match response {
+        Response::Suggest(_) => {}
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_risk_warning_with_suggestions_coexist() {
+    let daemon = TestDaemon::start().await;
+
+    daemon
+        .send(&Request::Record(RecordCommandRequest {
+            command: "rm -rf ./build".into(),
+            exit_code: 0,
+            stderr: None,
+            cwd: "/project".into(),
+            duration_ms: None,
+        }))
+        .await;
+
+    let response = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "rm -rf /".into(),
+            cursor_pos: 8,
+            context: RequestContext {
+                cwd: "/project".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        }))
+        .await;
+
+    match response {
+        Response::Suggest(s) => {
+            assert!(s.warning.is_some(), "risk warning should be present");
+        }
+        other => panic!("expected Suggest, got: {other:?}"),
     }
 
     daemon.shutdown().await;

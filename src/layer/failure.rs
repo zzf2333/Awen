@@ -25,6 +25,12 @@ pub struct FailureLayer {
     patterns: Vec<FailurePattern>,
 }
 
+impl Default for FailureLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FailureLayer {
     pub fn new() -> Self {
         Self {
@@ -193,7 +199,7 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("error: cannot find crate `tokio`", 1);
         assert!(result.is_some());
-        let (suggestion, hint) = result.unwrap();
+        let (suggestion, _hint) = result.unwrap();
         assert_eq!(suggestion.text, "cargo add tokio");
         assert_eq!(suggestion.source, SuggestionSource::Failure);
     }

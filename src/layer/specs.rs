@@ -45,6 +45,12 @@ pub struct SpecsLayer {
     specs: HashMap<String, CommandSpec>,
 }
 
+impl Default for SpecsLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpecsLayer {
     pub fn new() -> Self {
         Self {

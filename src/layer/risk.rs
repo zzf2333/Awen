@@ -22,6 +22,12 @@ pub struct RiskLayer {
     patterns: Vec<RiskPattern>,
 }
 
+impl Default for RiskLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RiskLayer {
     pub fn new() -> Self {
         Self {
