@@ -298,6 +298,10 @@ _awen_apply_response() {
 # Phase 1: Synchronous local-only suggest (<20ms)
 _awen_suggest_local() {
     if [[ -z "$BUFFER" || ! -S "$_AWEN_SOCKET" ]]; then
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
         _awen_clear_hint
@@ -392,6 +396,10 @@ _awen_handle_ai_result() {
 _awen_accept() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
         _awen_cancel_pending_ai
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
         BUFFER="$_AWEN_SUGGESTION"
         CURSOR=${#BUFFER}
         _AWEN_SUGGESTION=""
@@ -413,6 +421,10 @@ _awen_accept_word() {
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
             _awen_cancel_pending_ai
+            if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+                region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+                _AWEN_GHOST_HIGHLIGHT=""
+            fi
             BUFFER="$_AWEN_SUGGESTION"
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
@@ -430,6 +442,10 @@ _awen_accept_word() {
 _awen_dismiss() {
     if [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
         _awen_cancel_pending_ai
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
