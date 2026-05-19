@@ -14,8 +14,20 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 - **Failure Recovery** — Suggests fix commands after the previous command fails (suggest only, never execute)
 - **Risk Detection** — Inline warnings for dangerous commands like `rm -rf`, `git push --force`, `chmod 777`
 - **Command Specs Completion** — Deterministic argument completion in TOML format, built-in for git/docker/npm/cargo/brew/curl/ssh
-- **AI Completion** — Supports DeepSeek and Ollama, async non-blocking, can be disabled
+- **AI Completion** — Supports DeepSeek and Ollama, timeout-bounded optional, can be disabled
 - **Context Awareness** — Project type detection, Git status, recent commands, failure history
+
+## Feature Maturity
+
+| Feature | Status |
+|---------|--------|
+| Ghost Text (History + Specs) | **Stable** |
+| Risk Detection | **Stable** |
+| Failure Recovery (local patterns) | **Stable** |
+| AI Completion (DeepSeek / Ollama) | Experimental |
+| stderr Capture | Experimental (off by default) |
+| Command Explanation | Planned |
+| Dropdown Menu | Planned |
 
 ## Architecture
 
@@ -40,6 +52,7 @@ Terminal (Ghostty / Kitty / WezTerm / Alacritty)
 
 - Rust toolchain (1.85+)
 - zsh
+- jq (recommended, for robust JSON handling)
 - socat (optional, for shell-daemon communication; falls back to zsh built-in zsocket)
 
 ### Install from Source
@@ -118,12 +131,13 @@ session_history_size = 20       # Number of commands to remember in session
 stderr_max_chars = 500          # Max stderr length to capture
 repo_detect = true              # Auto-detect project type
 git_context = true              # Collect Git context
+capture_stderr = false          # Experimental: capture stderr for failure recovery
 
 [ui]
 ghost_text_color = 242          # Ghost text color (ANSI 256)
-dropdown_max_items = 8          # Max items in candidate menu
+dropdown_max_items = 8          # Max items in candidate menu (planned)
 risk_detection = true           # Dangerous command warnings
-command_explanation = true      # Command explanation feature
+command_explanation = false     # Command explanation (planned, not yet implemented)
 ```
 
 ### Custom Specs
@@ -166,6 +180,14 @@ In `~/.config/awen/risk_patterns.toml`:
 pattern = "my-dangerous-cmd --force"
 warning = "This will force-execute, are you sure?"
 ```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWEN_CAPTURE_STDERR` | `0` | Set to `1` to enable experimental stderr capture |
+| `AWEN_ENABLE_KEYBIND_OVERRIDE` | `1` | Set to `0` to disable Awen's keybinding overrides |
+| `DEEPSEEK_API_KEY` | — | DeepSeek API key (alternative to config file) |
 
 ## Safety Boundary
 

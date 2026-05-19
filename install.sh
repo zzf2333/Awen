@@ -22,6 +22,19 @@ if ! command -v cargo &>/dev/null; then
     exit 1
 fi
 
+# Check for zsh
+if ! command -v zsh &>/dev/null; then
+    warn "zsh not found. Awen requires zsh for the shell plugin."
+fi
+
+# Check for recommended tools
+if ! command -v jq &>/dev/null; then
+    warn "jq not found. Install jq for more robust JSON handling (recommended)."
+fi
+if ! command -v socat &>/dev/null; then
+    warn "socat not found. The plugin will fall back to zsh's built-in zsocket."
+fi
+
 info "Building awen (release mode)..."
 cargo build --release --manifest-path "${SCRIPT_DIR}/Cargo.toml"
 
@@ -62,13 +75,14 @@ session_history_size = 20
 stderr_max_chars = 500
 repo_detect = true
 git_context = true
+capture_stderr = false
 
 [ui]
 ghost_text_color = 242
 dropdown_max_items = 8
 hint_style = "above"
 risk_detection = true
-command_explanation = true
+command_explanation = false
 EOF
 else
     info "Config file already exists, skipping."
@@ -113,3 +127,11 @@ echo "  awen config   — view configuration"
 echo ""
 echo "For AI completions, set your API key in ${CONFIG_DIR}/config.toml"
 echo "or export DEEPSEEK_API_KEY=sk-your-key"
+echo ""
+echo "To disable AI completions: set ai.enabled = false in ${CONFIG_DIR}/config.toml"
+echo ""
+echo -e "${BOLD}To uninstall:${RESET}"
+echo "  rm ~/.local/bin/awen"
+echo "  rm -rf ~/.config/awen"
+echo "  rm -rf ~/.local/share/awen"
+echo "  # Remove 'source ~/.config/awen/awen.zsh' from ~/.zshrc"
