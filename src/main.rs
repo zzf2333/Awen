@@ -1,10 +1,6 @@
-mod arbitrator;
-mod config;
-mod context;
-mod daemon;
-mod layer;
-mod protocol;
-mod sanitize;
+use awen::config;
+use awen::daemon;
+use awen::protocol;
 
 use clap::{Parser, Subcommand};
 

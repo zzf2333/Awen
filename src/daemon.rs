@@ -25,18 +25,32 @@ struct DaemonState {
 }
 
 pub async fn run(config: AwenConfig) {
-    let socket_path = config::socket_path();
-    if socket_path.exists() {
-        std::fs::remove_file(&socket_path).ok();
+    let paths = DaemonPaths {
+        socket: config::socket_path(),
+        db: config::history_db_path(),
+        config_dir: config::config_dir(),
+    };
+    write_pid();
+    run_on_paths(config, &paths).await;
+    cleanup_pid();
+}
+
+pub struct DaemonPaths {
+    pub socket: std::path::PathBuf,
+    pub db: std::path::PathBuf,
+    pub config_dir: std::path::PathBuf,
+}
+
+pub async fn run_on_paths(config: AwenConfig, paths: &DaemonPaths) {
+    if paths.socket.exists() {
+        std::fs::remove_file(&paths.socket).ok();
     }
 
-    if let Some(parent) = socket_path.parent() {
+    if let Some(parent) = paths.socket.parent() {
         std::fs::create_dir_all(parent).ok();
     }
 
-    write_pid();
-
-    let history = match HistoryLayer::new(&config::history_db_path()) {
+    let history = match HistoryLayer::new(&paths.db) {
         Ok(h) => h,
         Err(e) => {
             tracing::error!("failed to open history db: {e}");
@@ -47,13 +61,13 @@ pub async fn run(config: AwenConfig) {
 
     let mut specs = SpecsLayer::new();
     specs.load_builtin_specs();
-    specs.load_user_specs(&config::config_dir().join("specs"));
+    specs.load_user_specs(&paths.config_dir.join("specs"));
 
     let mut failure = FailureLayer::new();
-    failure.load_user_patterns(&config::config_dir().join("failure_patterns.toml"));
+    failure.load_user_patterns(&paths.config_dir.join("failure_patterns.toml"));
 
     let mut risk = RiskLayer::new();
-    risk.load_user_patterns(&config::config_dir().join("risk_patterns.toml"));
+    risk.load_user_patterns(&paths.config_dir.join("risk_patterns.toml"));
 
     let ai_provider = ai::create_provider(&config);
 
@@ -68,17 +82,17 @@ pub async fn run(config: AwenConfig) {
         start_time: std::time::Instant::now(),
     }));
 
-    let listener = match UnixListener::bind(&socket_path) {
+    let listener = match UnixListener::bind(&paths.socket) {
         Ok(l) => l,
         Err(e) => {
             tracing::error!("failed to bind socket: {e}");
-            eprintln!("failed to bind socket at {}: {e}", socket_path.display());
+            eprintln!("failed to bind socket at {}: {e}", paths.socket.display());
             return;
         }
     };
 
-    tracing::info!("listening on {}", socket_path.display());
-    println!("awen daemon running (socket: {})", socket_path.display());
+    tracing::info!("listening on {}", paths.socket.display());
+    println!("awen daemon running (socket: {})", paths.socket.display());
 
     let shutdown = Arc::new(tokio::sync::Notify::new());
     let shutdown_clone = shutdown.clone();
@@ -111,8 +125,7 @@ pub async fn run(config: AwenConfig) {
         }
     }
 
-    std::fs::remove_file(&socket_path).ok();
-    cleanup_pid();
+    std::fs::remove_file(&paths.socket).ok();
     println!("awen daemon stopped");
 }
 
@@ -284,8 +297,14 @@ pub async fn send_context_request() -> Result<Response, Box<dyn std::error::Erro
 }
 
 async fn send_request(request: &Request) -> Result<Response, Box<dyn std::error::Error>> {
-    let socket_path = config::socket_path();
-    let stream = tokio::net::UnixStream::connect(&socket_path).await?;
+    send_request_to(&config::socket_path(), request).await
+}
+
+pub async fn send_request_to(
+    socket_path: &std::path::Path,
+    request: &Request,
+) -> Result<Response, Box<dyn std::error::Error>> {
+    let stream = tokio::net::UnixStream::connect(socket_path).await?;
     let (reader, mut writer) = stream.into_split();
 
     let mut json = serde_json::to_string(request)?;
