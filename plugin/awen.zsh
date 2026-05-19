@@ -95,18 +95,18 @@ _awen_send_nc() {
     local request="$1"
     # Try socat first, fall back to direct zsh TCP
     if command -v socat &>/dev/null; then
-        echo "$request" | socat -T 0.1 -t 0.5 - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
+        printf '%s\n' "$request" | socat -T 0.1 -t 0.5 - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
     else
         # Use zsh's built-in zsocket if available
         if zmodload zsh/net/socket 2>/dev/null; then
             local fd
             zsocket "$_AWEN_SOCKET" && fd=$REPLY
             if [[ -n "$fd" ]]; then
-                echo "$request" >&$fd
+                printf '%s\n' "$request" >&$fd
                 local response
                 read -r response <&$fd
                 exec {fd}>&-
-                echo "$response"
+                printf '%s\n' "$response"
             fi
         fi
     fi
@@ -345,8 +345,8 @@ _awen_apply_response() {
 
     # Parse hint/warning
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-        hint_text=$(echo "$response" | jq -r '.hint.text // empty' 2>/dev/null)
-        warning_text=$(echo "$response" | jq -r '.warning.text // empty' 2>/dev/null)
+        hint_text=$(printf '%s\n' "$response" | jq -r '.hint.text // empty' 2>/dev/null)
+        warning_text=$(printf '%s\n' "$response" | jq -r '.warning.text // empty' 2>/dev/null)
     else
         if [[ "$response" == *'"hint":'*'"text":"'* ]]; then
             local tmp="${response#*\"hint\":*\"text\":\"}"
@@ -371,7 +371,7 @@ _awen_apply_response() {
             [[ -z "$s_text" ]] && continue
             _AWEN_MENU_TEXTS+=("$s_text")
             _AWEN_MENU_SOURCES+=("$s_source")
-        done < <(echo "$response" | jq -r '.suggestions[] | "\(.text)\t\(.source)"' 2>/dev/null)
+        done < <(printf '%s\n' "$response" | jq -r '.suggestions[] | "\(.text)\t\(.source)"' 2>/dev/null)
     else
         local _remaining="${response#*\"suggestions\":\[}"
         while [[ "$_remaining" == *'"text":"'* ]]; do
@@ -482,7 +482,7 @@ _awen_schedule_ai() {
     exec {_AWEN_AI_FD}< <(
         sleep "$delay"
         [[ "$(cat "$token_file" 2>/dev/null)" != "$seq" ]] && exit 0
-        echo "$request" | socat -t 10 - UNIX-CONNECT:"$socket" 2>/dev/null
+        printf '%s\n' "$request" | socat -t 10 - UNIX-CONNECT:"$socket" 2>/dev/null
     )
     _AWEN_AI_PID=$!
 
