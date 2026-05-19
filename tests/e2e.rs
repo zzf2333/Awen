@@ -38,6 +38,31 @@ impl AiProvider for SlowMockProvider {
     }
 }
 
+struct FastMockProvider {
+    call_count: std::sync::atomic::AtomicU32,
+}
+
+impl FastMockProvider {
+    fn new() -> Self {
+        Self {
+            call_count: std::sync::atomic::AtomicU32::new(0),
+        }
+    }
+
+    fn calls(&self) -> u32 {
+        self.call_count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl AiProvider for FastMockProvider {
+    async fn complete(&self, _prompt: &str, _max_tokens: u32) -> Result<String, AiError> {
+        self.call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok("pods --all-namespaces".into())
+    }
+}
+
 impl TestDaemon {
     async fn start() -> Self {
         Self::start_with_config_and_ai(test_config(), None).await
@@ -891,6 +916,131 @@ async fn test_ai_timeout_returns_local_suggestions() {
         }
         other => panic!("expected Suggest response, got: {other:?}"),
     }
+
+    daemon.shutdown().await;
+}
+
+// ============================================================
+// AI merge + debounce E2E tests
+// ============================================================
+
+#[tokio::test]
+async fn test_ai_suggestion_merged_into_response() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider: Arc<dyn AiProvider> = Arc::new(FastMockProvider::new());
+    let daemon = TestDaemon::start_with_ai(config, provider).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "kubectl get".into(),
+        cursor_pos: 11,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            let ai_suggestions: Vec<_> = s
+                .suggestions
+                .iter()
+                .filter(|sg| sg.source == SuggestionSource::Ai)
+                .collect();
+            assert!(
+                !ai_suggestions.is_empty(),
+                "should have AI suggestion merged into response, got sources: {:?}",
+                s.suggestions.iter().map(|sg| sg.source).collect::<Vec<_>>()
+            );
+            assert!(
+                ai_suggestions[0].text.contains("pods"),
+                "AI suggestion should contain mock completion, got: {}",
+                ai_suggestions[0].text
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_ai_debounce_skips_second_request() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 5000;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let make_req = |input: &str| {
+        Request::Suggest(SuggestRequest {
+            input: input.into(),
+            cursor_pos: input.len(),
+            context: RequestContext {
+                cwd: "/home/user/project".into(),
+                last_command: None,
+                last_exit_code: Some(0),
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        })
+    };
+
+    let resp1 = daemon.send(&make_req("kubectl get")).await;
+    match &resp1 {
+        Response::Suggest(s) => {
+            assert!(
+                s.suggestions
+                    .iter()
+                    .any(|sg| sg.source == SuggestionSource::Ai),
+                "first request should trigger AI"
+            );
+        }
+        other => panic!("expected Suggest, got: {other:?}"),
+    }
+    assert_eq!(
+        provider.calls(),
+        1,
+        "AI should be called once for first request"
+    );
+
+    let resp2 = daemon.send(&make_req("kubectl apply")).await;
+    match &resp2 {
+        Response::Suggest(s) => {
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "second request within debounce window should NOT have AI suggestion"
+            );
+        }
+        other => panic!("expected Suggest, got: {other:?}"),
+    }
+    assert_eq!(
+        provider.calls(),
+        1,
+        "AI should NOT be called again within debounce window"
+    );
 
     daemon.shutdown().await;
 }
