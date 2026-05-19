@@ -95,7 +95,7 @@ cp specs/*.toml ~/.config/awen/specs/
 |------|------|
 | `→` | 接受整条 ghost text |
 | `Ctrl+→` | 接受下一个单词 |
-| `Esc` | 清除建议 |
+| `Shift+Tab` | 清除建议 |
 
 ### CLI 命令
 

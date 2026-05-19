@@ -76,14 +76,6 @@ _awen_ensure_daemon() {
     fi
 }
 
-_awen_send() {
-    if [[ ! -S "$_AWEN_SOCKET" ]]; then
-        return 1
-    fi
-    local request="$1"
-    echo "$request" | socat - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
-}
-
 _awen_send_nc() {
     if [[ ! -S "$_AWEN_SOCKET" ]]; then
         return 1
@@ -257,7 +249,12 @@ _awen_apply_response() {
     local response="$1"
 
     if [[ -z "$response" ]]; then
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
         POSTDISPLAY=""
+        _AWEN_SUGGESTION=""
         return
     fi
 
@@ -290,6 +287,10 @@ _awen_apply_response() {
     if [[ -n "$suggestion_text" ]]; then
         _awen_render_ghost "$suggestion_text"
     else
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
     fi
