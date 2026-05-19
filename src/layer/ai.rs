@@ -44,9 +44,10 @@ impl DeepSeekProvider {
             config.ai.deepseek.api_key.clone()
         };
 
+        let request_timeout = std::time::Duration::from_millis(config.ai.timeout_ms.max(5000));
         let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(10))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(request_timeout)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
@@ -135,9 +136,10 @@ pub struct OllamaProvider {
 
 impl OllamaProvider {
     pub fn new(config: &AwenConfig) -> Self {
+        let request_timeout = std::time::Duration::from_millis(config.ai.timeout_ms.max(5000));
         let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(10))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(request_timeout)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 

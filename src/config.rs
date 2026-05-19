@@ -64,7 +64,7 @@ impl Default for AiConfig {
             enabled: true,
             provider: "deepseek".into(),
             debounce_ms: 300,
-            timeout_ms: 5000,
+            timeout_ms: 30000,
             max_tokens: 1024,
             cache_ttl_minutes: 30,
             deepseek: DeepSeekConfig::default(),

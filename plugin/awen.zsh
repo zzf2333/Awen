@@ -14,6 +14,7 @@ typeset -g _AWEN_GHOST_HIGHLIGHT=""
 typeset -g _AWEN_AI_FD=""
 typeset -g _AWEN_AI_PID=""
 typeset -g _AWEN_AI_SNAPSHOT=""
+typeset -g _AWEN_AI_PENDING=""
 typeset -g _AWEN_AI_SEQ=0
 typeset -g _AWEN_AI_ACTIVE_SEQ=0
 typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
@@ -83,7 +84,7 @@ _awen_send_nc() {
     local request="$1"
     # Try socat first, fall back to direct zsh TCP
     if command -v socat &>/dev/null; then
-        echo "$request" | socat -T 0.1 - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
+        echo "$request" | socat -T 0.1 -t 0.5 - UNIX-CONNECT:"$_AWEN_SOCKET" 2>/dev/null
     else
         # Use zsh's built-in zsocket if available
         if zmodload zsh/net/socket 2>/dev/null; then
@@ -337,10 +338,7 @@ _awen_cancel_pending_ai() {
         exec {_AWEN_AI_FD}<&- 2>/dev/null
         _AWEN_AI_FD=""
     fi
-    if [[ -n "$_AWEN_AI_PID" ]]; then
-        kill "$_AWEN_AI_PID" 2>/dev/null
-        _AWEN_AI_PID=""
-    fi
+    _AWEN_AI_PID=""
 }
 
 # Phase 2: Schedule async AI request after AWEN_AI_DELAY
@@ -349,7 +347,6 @@ _awen_schedule_ai() {
 
     [[ ${#BUFFER} -lt 3 ]] && return
     [[ ! -S "$_AWEN_SOCKET" ]] && return
-    # Async path requires socat (zsocket doesn't work in subshells)
     command -v socat &>/dev/null || return
 
     _AWEN_AI_SNAPSHOT="$BUFFER"
@@ -359,37 +356,54 @@ _awen_schedule_ai() {
     local request=$(_awen_build_request "$BUFFER" "$CURSOR" false)
     local socket="$_AWEN_SOCKET"
     local delay="$_AWEN_AI_DELAY"
+    local seq=$_AWEN_AI_SEQ
+    local token_file="${TMPDIR:-/tmp}/.awen-ai-token-$$"
+
+    echo "$seq" > "$token_file"
 
     exec {_AWEN_AI_FD}< <(
         sleep "$delay"
-        echo "$request" | socat -T 3 - UNIX-CONNECT:"$socket" 2>/dev/null
+        [[ "$(cat "$token_file" 2>/dev/null)" != "$seq" ]] && exit 0
+        echo "$request" | socat -t 10 - UNIX-CONNECT:"$socket" 2>/dev/null
     )
     _AWEN_AI_PID=$!
 
     zle -F "$_AWEN_AI_FD" _awen_handle_ai_result
 }
 
-# Callback: async AI response arrived
+# zle -F handler: reads AI response, delegates to a real widget for display.
+# BUFFER/POSTDISPLAY changes inside zle -F handlers don't persist, so
+# we stash the response and invoke _awen_apply_ai via `zle` to get a
+# proper widget context where display updates take effect.
 _awen_handle_ai_result() {
     local fd="$1"
-    local response=""
 
-    if ! read -r response <&$fd 2>/dev/null; then
+    if ! IFS='' read -r _AWEN_AI_PENDING <&$fd 2>/dev/null; then
+        _AWEN_AI_PENDING=""
         zle -F "$fd" 2>/dev/null
         exec {fd}<&- 2>/dev/null
-        _AWEN_AI_FD=""
-        _AWEN_AI_PID=""
+        [[ "$fd" == "$_AWEN_AI_FD" ]] && { _AWEN_AI_FD=""; _AWEN_AI_PID=""; }
         return
     fi
 
     zle -F "$fd" 2>/dev/null
     exec {fd}<&- 2>/dev/null
-    _AWEN_AI_FD=""
-    _AWEN_AI_PID=""
+    [[ "$fd" == "$_AWEN_AI_FD" ]] && { _AWEN_AI_FD=""; _AWEN_AI_PID=""; }
 
-    # Discard stale results
-    [[ "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]] && return
-    [[ "$_AWEN_AI_ACTIVE_SEQ" != "$_AWEN_AI_SEQ" ]] && return
+    zle _awen_apply_ai -w 2>/dev/null
+}
+
+# Widget: apply stashed AI response (runs in full widget context)
+_awen_apply_ai() {
+    [[ -z "$_AWEN_AI_PENDING" ]] && return
+    local response="$_AWEN_AI_PENDING"
+    _AWEN_AI_PENDING=""
+
+    # Restore BUFFER from snapshot (empty after zle -F dispatch)
+    if [[ -z "$BUFFER" && -n "$_AWEN_AI_SNAPSHOT" ]]; then
+        BUFFER="$_AWEN_AI_SNAPSHOT"
+        CURSOR=${#BUFFER}
+    fi
 
     _awen_apply_response "$response"
     zle -R
@@ -553,7 +567,7 @@ awen_init() {
     fi
 
     # Cleanup on shell exit
-    trap '_awen_cancel_pending_ai; rm -f "$_AWEN_LAST_STDERR_FILE" 2>/dev/null' EXIT
+    trap '_awen_cancel_pending_ai; rm -f "$_AWEN_LAST_STDERR_FILE" "${TMPDIR:-/tmp}/.awen-ai-token-$$" 2>/dev/null' EXIT
 
     _awen_ensure_daemon
 
@@ -564,7 +578,7 @@ awen_init() {
     zle -N _awen_accept_word
     zle -N _awen_dismiss
     zle -N _awen_suggest_local
-    zle -N _awen_handle_ai_result
+    zle -N _awen_apply_ai
 
     # Keybinding setup (disable with AWEN_ENABLE_KEYBIND_OVERRIDE=0)
     if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then

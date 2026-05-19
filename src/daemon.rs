@@ -289,6 +289,13 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             last_ai_request_at,
             debounce_ms,
         ) {
+            // Update debounce timestamp BEFORE the AI call so concurrent
+            // requests within the debounce window are rejected.
+            {
+                let mut state = state.lock().await;
+                state.last_ai_request_at = Some(std::time::Instant::now());
+            }
+
             let mut ctx = req.context.clone();
             crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
 
@@ -321,9 +328,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
                     tracing::info!("AI completion timed out ({}ms)", timeout_ms);
                 }
             }
-
-            let mut state = state.lock().await;
-            state.last_ai_request_at = Some(std::time::Instant::now());
         }
     }
 
