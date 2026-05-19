@@ -19,7 +19,7 @@ struct DaemonState {
     specs: SpecsLayer,
     failure: FailureLayer,
     risk: RiskLayer,
-    ai_provider: Option<Box<dyn ai::AiProvider>>,
+    ai_provider: Option<Arc<dyn ai::AiProvider>>,
     config: AwenConfig,
     start_time: std::time::Instant,
 }
@@ -179,35 +179,70 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let mut state = state.lock().await;
+    let (mut response, ai_provider, max_tokens, stderr_max_chars) = {
+        let mut state = state.lock().await;
+        state.context.update_cwd(req.context.cwd.clone());
 
-    state.context.update_cwd(req.context.cwd.clone());
+        let mut suggestions = Vec::new();
 
-    let mut suggestions = Vec::new();
+        let history_results = state.history.suggest(&req.input, &req.context.cwd, 5);
+        suggestions.extend(history_results);
 
-    let history_results = state.history.suggest(&req.input, &req.context.cwd, 5);
-    suggestions.extend(history_results);
+        let specs_results = state.specs.suggest(&req.input, req.cursor_pos);
+        suggestions.extend(specs_results);
 
-    let specs_results = state.specs.suggest(&req.input, req.cursor_pos);
-    suggestions.extend(specs_results);
+        let mut hint = None;
+        if let Some(exit_code) = req.context.last_exit_code
+            && exit_code != 0
+            && let Some(stderr) = &req.context.last_stderr
+            && let Some((fail_suggestion, fail_hint)) =
+                state.failure.match_failure(stderr, exit_code)
+        {
+            suggestions.push(fail_suggestion);
+            hint = Some(fail_hint);
+        }
 
-    let mut hint = None;
-    if let Some(exit_code) = req.context.last_exit_code
-        && exit_code != 0
-        && let Some(stderr) = &req.context.last_stderr
-        && let Some((fail_suggestion, fail_hint)) = state.failure.match_failure(stderr, exit_code)
-    {
-        suggestions.push(fail_suggestion);
-        hint = Some(fail_hint);
-    }
+        let warning = if state.config.ui.risk_detection {
+            state.risk.check(&req.input)
+        } else {
+            None
+        };
 
-    let warning = if state.config.ui.risk_detection {
-        state.risk.check(&req.input)
-    } else {
-        None
+        let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
+        let ai_provider = state.ai_provider.clone();
+        let max_tokens = state.config.ai.max_tokens;
+        let stderr_max_chars = state.config.context.stderr_max_chars;
+
+        (response, ai_provider, max_tokens, stderr_max_chars)
     };
 
-    let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
+    if let Some(provider) = ai_provider {
+        if !req.input.is_empty() {
+            let mut ctx = req.context.clone();
+            crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
+
+            let prompt = ai::build_prompt(&req.input, &ctx);
+
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(500),
+                provider.complete(&prompt, max_tokens),
+            )
+            .await
+            {
+                Ok(Ok(ai_response)) => {
+                    if let Some(suggestion) = ai::parse_ai_suggestion(&req.input, &ai_response) {
+                        Arbitrator::merge_ai_suggestion(&mut response, suggestion);
+                    }
+                }
+                Ok(Err(e)) => {
+                    tracing::debug!("AI completion error: {e}");
+                }
+                Err(_) => {
+                    tracing::debug!("AI completion timed out");
+                }
+            }
+        }
+    }
 
     Response::Suggest(response)
 }

@@ -9,6 +9,24 @@ typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 
+# Extract a JSON string value, handling escaped quotes
+_awen_extract_json_value() {
+    local input="$1"
+    local result=""
+    local i=0
+    local ch prev_ch=""
+    while [[ $i -lt ${#input} ]]; do
+        ch="${input:$i:1}"
+        if [[ "$ch" == '"' && "$prev_ch" != '\' ]]; then
+            break
+        fi
+        result+="$ch"
+        prev_ch="$ch"
+        ((i++))
+    done
+    echo "$result"
+}
+
 _awen_find_binary() {
     if [[ -x "${HOME}/.local/bin/awen" ]]; then
         _AWEN_BIN="${HOME}/.local/bin/awen"
@@ -163,28 +181,29 @@ _awen_suggest() {
         return
     fi
 
-    # Parse response — extract first suggestion text
+    # Parse response
     local suggestion_text=""
     local hint_text=""
     local warning_text=""
 
-    # Simple JSON parsing using zsh parameter expansion
-    # Extract first suggestion text
-    if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
-        local tmp="${response#*\"suggestions\":*\"text\":\"}"
-        suggestion_text="${tmp%%\"*}"
-    fi
-
-    # Extract hint
-    if [[ "$response" == *'"hint":'*'"text":"'* ]]; then
-        local tmp="${response#*\"hint\":*\"text\":\"}"
-        hint_text="${tmp%%\"*}"
-    fi
-
-    # Extract warning
-    if [[ "$response" == *'"warning":'*'"text":"'* ]]; then
-        local tmp="${response#*\"warning\":*\"text\":\"}"
-        warning_text="${tmp%%\"*}"
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        suggestion_text=$(echo "$response" | jq -r '.suggestions[0].text // empty' 2>/dev/null)
+        hint_text=$(echo "$response" | jq -r '.hint.text // empty' 2>/dev/null)
+        warning_text=$(echo "$response" | jq -r '.warning.text // empty' 2>/dev/null)
+    else
+        # Fallback: manual parsing with escaped-quote handling
+        if [[ "$response" == *'"suggestions":'*'"text":"'* ]]; then
+            local tmp="${response#*\"suggestions\":*\"text\":\"}"
+            suggestion_text=$(_awen_extract_json_value "$tmp")
+        fi
+        if [[ "$response" == *'"hint":'*'"text":"'* ]]; then
+            local tmp="${response#*\"hint\":*\"text\":\"}"
+            hint_text=$(_awen_extract_json_value "$tmp")
+        fi
+        if [[ "$response" == *'"warning":'*'"text":"'* ]]; then
+            local tmp="${response#*\"warning\":*\"text\":\"}"
+            warning_text=$(_awen_extract_json_value "$tmp")
+        fi
     fi
 
     _AWEN_WARNING="$warning_text"
@@ -268,10 +287,19 @@ _awen_dismiss() {
 _awen_precmd() {
     _AWEN_LAST_EXIT_CODE=$?
 
+    # Restore original stderr if we redirected it
+    if [[ -n "${_AWEN_STDERR_BACKUP:-}" ]]; then
+        exec 2>&${_AWEN_STDERR_BACKUP}
+        exec {_AWEN_STDERR_BACKUP}>&-
+        unset _AWEN_STDERR_BACKUP
+        # Allow tee subprocess to flush
+        sleep 0.01
+    fi
+
     # Record command to daemon
     if [[ -n "$_AWEN_LAST_COMMAND" && -S "$_AWEN_SOCKET" ]]; then
         local stderr_content=""
-        if [[ -f "$_AWEN_LAST_STDERR_FILE" ]]; then
+        if [[ -f "$_AWEN_LAST_STDERR_FILE" && -s "$_AWEN_LAST_STDERR_FILE" ]]; then
             stderr_content=$(head -c 500 "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
         fi
 
@@ -291,9 +319,10 @@ _awen_precmd() {
 # Hook: before each command runs
 _awen_preexec() {
     _AWEN_LAST_COMMAND="$1"
-    # Capture stderr to temp file
-    # Note: full stderr capture requires special setup;
-    # we capture what we can from the precmd hook
+    : > "$_AWEN_LAST_STDERR_FILE"
+    # Save original stderr fd and redirect through tee for capture
+    exec {_AWEN_STDERR_BACKUP}>&2
+    exec 2> >(tee "$_AWEN_LAST_STDERR_FILE" >&${_AWEN_STDERR_BACKUP})
 }
 
 # Self-insert wrapper: trigger suggest after each keystroke
@@ -316,6 +345,16 @@ awen_init() {
         echo "awen: binary not found. Install with: cargo install --path ."
         return 1
     fi
+
+    # Detect jq for robust JSON parsing
+    if command -v jq &>/dev/null; then
+        typeset -g _AWEN_HAS_JQ=1
+    else
+        typeset -g _AWEN_HAS_JQ=0
+    fi
+
+    # Cleanup stderr capture file on shell exit
+    trap 'rm -f "$_AWEN_LAST_STDERR_FILE" 2>/dev/null' EXIT
 
     _awen_ensure_daemon
 

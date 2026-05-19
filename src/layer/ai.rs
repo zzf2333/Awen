@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::config::AwenConfig;
 use crate::protocol::{RequestContext, Suggestion, SuggestionSource};
 
@@ -184,20 +186,20 @@ pub fn build_prompt(input: &str, context: &RequestContext) -> String {
     parts.join("\n")
 }
 
-pub fn create_provider(config: &AwenConfig) -> Option<Box<dyn AiProvider>> {
+pub fn create_provider(config: &AwenConfig) -> Option<Arc<dyn AiProvider>> {
     if !config.ai.enabled {
         return None;
     }
 
     match config.ai.provider.as_str() {
         "deepseek" => match DeepSeekProvider::new(config) {
-            Ok(p) => Some(Box::new(p)),
+            Ok(p) => Some(Arc::new(p)),
             Err(e) => {
                 tracing::warn!("failed to create DeepSeek provider: {e}");
                 None
             }
         },
-        "ollama" => Some(Box::new(OllamaProvider::new(config))),
+        "ollama" => Some(Arc::new(OllamaProvider::new(config))),
         other => {
             tracing::warn!("unknown AI provider: {other}");
             None

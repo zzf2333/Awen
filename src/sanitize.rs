@@ -37,6 +37,13 @@ pub fn sanitize_stderr(stderr: &str, max_chars: usize) -> String {
         .to_string()
 }
 
+pub fn sanitize_request_context(ctx: &mut crate::protocol::RequestContext, stderr_max_chars: usize) {
+    if let Some(ref stderr) = ctx.last_stderr {
+        ctx.last_stderr = Some(sanitize_stderr(stderr, stderr_max_chars));
+    }
+    ctx.env_hints = sanitize_env_hints(&ctx.env_hints);
+}
+
 pub fn is_sensitive_path(path: &str) -> bool {
     let sensitive_patterns = [
         ".env",
@@ -90,6 +97,32 @@ mod tests {
         let result = sanitize_stderr(stderr, 500);
         assert!(result.contains("[REDACTED]"));
         assert!(!result.contains("sk-abcdefghijklmnopqrstuvwxyz12345"));
+    }
+
+    #[test]
+    fn test_sanitize_request_context() {
+        use crate::protocol::RequestContext;
+        let mut ctx = RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: Some(1),
+            last_stderr: Some(
+                "error with token sk-abcdefghijklmnopqrstuvwxyz12345 involved".into(),
+            ),
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec!["NODE_ENV=dev".into(), "API_KEY=secret123".into()],
+        };
+        sanitize_request_context(&mut ctx, 500);
+        assert!(ctx.last_stderr.as_ref().unwrap().contains("[REDACTED]"));
+        assert!(!ctx
+            .last_stderr
+            .as_ref()
+            .unwrap()
+            .contains("sk-abcdefghijklmnopqrstuvwxyz12345"));
+        assert_eq!(ctx.env_hints.len(), 1);
+        assert_eq!(ctx.env_hints[0], "NODE_ENV=dev");
     }
 
     #[test]

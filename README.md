@@ -45,7 +45,7 @@ Terminal (Ghostty / Kitty / WezTerm / Alacritty)
 ### Install from Source
 
 ```bash
-git clone https://github.com/SaoNian/awen.git
+git clone https://github.com/zzf2333/Awen.git
 cd awen
 ./install.sh
 ```
