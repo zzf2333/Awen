@@ -130,18 +130,30 @@ _awen_render_ghost() {
         return
     fi
 
-    _AWEN_SUGGESTION="$suggestion"
-
     local input="$BUFFER"
-    local ghost_part=""
+    local full_suggestion=""
 
-    # If suggestion is a completion of current input, show only the remaining part
+    # Reconstruct full command from suggestion
     if [[ "$suggestion" == "$input"* ]]; then
-        ghost_part="${suggestion#$input}"
-    elif [[ -n "${input}${suggestion}" ]]; then
-        ghost_part="$suggestion"
+        # Full prefix match (e.g., history: "git checkout" starts with "git ch")
+        full_suggestion="$suggestion"
+    else
+        local last_word="${input##* }"
+        if [[ -n "$last_word" && "$suggestion" == "$last_word"* ]]; then
+            # Word completion (e.g., specs: "checkout" completes "ch")
+            full_suggestion="${input%$last_word}${suggestion}"
+        elif [[ "$input" == *" " ]]; then
+            # Input ends with space, append suggestion
+            full_suggestion="${input}${suggestion}"
+        else
+            # Append with space (e.g., AI: "pods" after "kubectl get")
+            full_suggestion="${input} ${suggestion}"
+        fi
     fi
 
+    _AWEN_SUGGESTION="$full_suggestion"
+
+    local ghost_part="${full_suggestion#$input}"
     if [[ -n "$ghost_part" ]]; then
         POSTDISPLAY="$ghost_part"
         _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) fg=242"
@@ -187,7 +199,7 @@ _awen_suggest() {
     # Build JSON request
     local request
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-        request=$(jq -n \
+        request=$(jq -cn \
             --arg input "$BUFFER" \
             --argjson cursor "$CURSOR" \
             --arg cwd "$cwd" \
@@ -271,12 +283,7 @@ _awen_suggest() {
 # Accept full ghost text suggestion
 _awen_accept() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
-        local input="$BUFFER"
-        if [[ "$_AWEN_SUGGESTION" == "$input"* ]]; then
-            BUFFER="$_AWEN_SUGGESTION"
-        else
-            BUFFER="${input}${_AWEN_SUGGESTION}"
-        fi
+        BUFFER="$_AWEN_SUGGESTION"
         CURSOR=${#BUFFER}
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
@@ -291,25 +298,16 @@ _awen_accept() {
 _awen_accept_word() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
         local input="$BUFFER"
-        local remaining=""
-
-        if [[ "$_AWEN_SUGGESTION" == "$input"* ]]; then
-            remaining="${_AWEN_SUGGESTION#$input}"
-        else
-            remaining="$_AWEN_SUGGESTION"
-        fi
+        local remaining="${_AWEN_SUGGESTION#$input}"
 
         # Get next word (up to next space)
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
-            # No more spaces, accept all
-            BUFFER="${input}${remaining}"
+            BUFFER="$_AWEN_SUGGESTION"
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
         else
             BUFFER="${input}${next_word} "
-            # Update suggestion to remaining
-            _AWEN_SUGGESTION="${input}${remaining}"
             _awen_render_ghost "$_AWEN_SUGGESTION"
         fi
         CURSOR=${#BUFFER}
@@ -354,7 +352,7 @@ _awen_precmd() {
 
         local record_request
         if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-            record_request=$(jq -n \
+            record_request=$(jq -cn \
                 --arg cmd "$_AWEN_LAST_COMMAND" \
                 --argjson exit "$_AWEN_LAST_EXIT_CODE" \
                 --arg stderr "${stderr_content:-}" \
