@@ -96,15 +96,31 @@ impl AiProvider for DeepSeekProvider {
             .await
             .map_err(|e| AiError::ParseFailed(e.to_string()))?;
 
-        tracing::debug!("DeepSeek response: {}", json);
+        tracing::info!("DeepSeek JSON: {}", json);
 
-        let content = json["choices"][0]["message"]["content"]
+        let message = &json["choices"][0]["message"];
+
+        let content = message["content"]
             .as_str()
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
 
         if !content.is_empty() {
             return Ok(content);
+        }
+
+        // Reasoning models (e.g. deepseek-v4-flash) may put all output in
+        // reasoning_content when the token budget is tight. Fall back to it
+        // and let parse_ai_suggestion decide if it's a usable completion.
+        if let Some(reasoning) = message["reasoning_content"].as_str() {
+            let trimmed = reasoning.trim();
+            if !trimmed.is_empty() {
+                tracing::info!(
+                    "Falling back to reasoning_content ({} chars)",
+                    trimmed.len()
+                );
+                return Ok(trimmed.to_string());
+            }
         }
 
         Err(AiError::ParseFailed("empty content in response".into()))

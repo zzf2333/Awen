@@ -64,8 +64,8 @@ if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
 enabled = true
 provider = "deepseek"
 debounce_ms = 300
-timeout_ms = 2000
-max_tokens = 256
+timeout_ms = 5000
+max_tokens = 1024
 cache_ttl_minutes = 30
 
 [ai.deepseek]

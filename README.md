@@ -117,7 +117,8 @@ Config file at `~/.config/awen/config.toml`:
 enabled = true                  # Toggle AI completion
 provider = "deepseek"           # deepseek | ollama
 debounce_ms = 300               # Delay before triggering AI after typing stops
-max_tokens = 256                # Max tokens for AI generation (reasoning models need more)
+timeout_ms = 5000               # AI request timeout in ms (async, never blocks input)
+max_tokens = 1024               # Max tokens for AI generation (reasoning models need more)
 
 [ai.deepseek]
 api_key = ""                    # Or set DEEPSEEK_API_KEY env var

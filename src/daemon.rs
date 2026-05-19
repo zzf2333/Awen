@@ -293,6 +293,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
 
             let prompt = ai::build_prompt(&req.input, &ctx);
+            tracing::info!("AI request for input: {:?}", req.input);
 
             match tokio::time::timeout(
                 std::time::Duration::from_millis(timeout_ms),
@@ -301,17 +302,23 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             .await
             {
                 Ok(Ok(ai_response)) => {
+                    tracing::info!("AI raw response: {:?}", ai_response);
                     if let Some(suggestion) = ai::parse_ai_suggestion(&req.input, &ai_response) {
+                        tracing::info!("AI suggestion accepted: {:?}", suggestion.text);
                         Arbitrator::merge_ai_suggestion(&mut response, suggestion);
+                        tracing::info!(
+                            "Response after merge: {} suggestions",
+                            response.suggestions.len()
+                        );
                     } else {
-                        tracing::debug!("AI response rejected: {:?}", ai_response);
+                        tracing::info!("AI response rejected by parse_ai_suggestion");
                     }
                 }
                 Ok(Err(e)) => {
-                    tracing::debug!("AI completion error: {e}");
+                    tracing::info!("AI completion error: {e}");
                 }
                 Err(_) => {
-                    tracing::debug!("AI completion timed out ({}ms)", timeout_ms);
+                    tracing::info!("AI completion timed out ({}ms)", timeout_ms);
                 }
             }
 
