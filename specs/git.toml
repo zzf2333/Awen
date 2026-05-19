@@ -1,0 +1,231 @@
+[command]
+name = "git"
+description = "Distributed version control system"
+
+[[command.subcommands]]
+name = "add"
+description = "Add file contents to the index"
+[[command.subcommands.flags]]
+name = "--all"
+short = "-A"
+description = "Add all changes"
+[[command.subcommands.flags]]
+name = "--patch"
+short = "-p"
+description = "Interactively choose hunks"
+
+[[command.subcommands]]
+name = "commit"
+description = "Record changes to the repository"
+[[command.subcommands.flags]]
+name = "--message"
+short = "-m"
+arg = "MSG"
+description = "Commit message"
+[[command.subcommands.flags]]
+name = "--amend"
+description = "Amend the previous commit"
+[[command.subcommands.flags]]
+name = "--no-edit"
+description = "Use previous commit message"
+[[command.subcommands.flags]]
+name = "--all"
+short = "-a"
+description = "Stage all modified files"
+
+[[command.subcommands]]
+name = "push"
+description = "Update remote refs"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force push"
+[[command.subcommands.flags]]
+name = "--set-upstream"
+short = "-u"
+description = "Set upstream branch"
+[[command.subcommands.flags]]
+name = "--tags"
+description = "Push tags"
+
+[[command.subcommands]]
+name = "pull"
+description = "Fetch and integrate remote changes"
+[[command.subcommands.flags]]
+name = "--rebase"
+short = "-r"
+description = "Rebase instead of merge"
+[[command.subcommands.flags]]
+name = "--no-rebase"
+description = "Merge instead of rebase"
+
+[[command.subcommands]]
+name = "checkout"
+description = "Switch branches or restore files"
+[[command.subcommands.flags]]
+name = "--branch"
+short = "-b"
+arg = "BRANCH"
+description = "Create and switch to new branch"
+
+[[command.subcommands]]
+name = "branch"
+description = "List, create, or delete branches"
+[[command.subcommands.flags]]
+name = "--delete"
+short = "-d"
+arg = "BRANCH"
+description = "Delete branch"
+[[command.subcommands.flags]]
+name = "--all"
+short = "-a"
+description = "List all branches"
+[[command.subcommands.flags]]
+name = "--move"
+short = "-m"
+arg = "NEW_NAME"
+description = "Rename branch"
+
+[[command.subcommands]]
+name = "merge"
+description = "Join development histories"
+[[command.subcommands.flags]]
+name = "--no-ff"
+description = "Create merge commit"
+[[command.subcommands.flags]]
+name = "--squash"
+description = "Squash commits"
+[[command.subcommands.flags]]
+name = "--abort"
+description = "Abort merge"
+
+[[command.subcommands]]
+name = "rebase"
+description = "Reapply commits on top of another base"
+[[command.subcommands.flags]]
+name = "--interactive"
+short = "-i"
+description = "Interactive rebase"
+[[command.subcommands.flags]]
+name = "--abort"
+description = "Abort rebase"
+[[command.subcommands.flags]]
+name = "--continue"
+description = "Continue rebase"
+
+[[command.subcommands]]
+name = "stash"
+description = "Stash changes"
+[[command.subcommands.subcommands]]
+name = "pop"
+description = "Apply and remove stash"
+[[command.subcommands.subcommands]]
+name = "list"
+description = "List stashes"
+[[command.subcommands.subcommands]]
+name = "drop"
+description = "Remove a stash"
+
+[[command.subcommands]]
+name = "log"
+description = "Show commit logs"
+[[command.subcommands.flags]]
+name = "--oneline"
+description = "One line per commit"
+[[command.subcommands.flags]]
+name = "--graph"
+description = "Show graph"
+[[command.subcommands.flags]]
+name = "--all"
+description = "Show all branches"
+[[command.subcommands.flags]]
+name = "-n"
+arg = "N"
+description = "Limit number of commits"
+
+[[command.subcommands]]
+name = "diff"
+description = "Show changes"
+[[command.subcommands.flags]]
+name = "--staged"
+description = "Show staged changes"
+[[command.subcommands.flags]]
+name = "--cached"
+description = "Show staged changes"
+[[command.subcommands.flags]]
+name = "--stat"
+description = "Show diffstat"
+
+[[command.subcommands]]
+name = "status"
+description = "Show working tree status"
+[[command.subcommands.flags]]
+name = "--short"
+short = "-s"
+description = "Short format"
+
+[[command.subcommands]]
+name = "clone"
+description = "Clone a repository"
+[[command.subcommands.flags]]
+name = "--depth"
+arg = "N"
+description = "Shallow clone"
+[[command.subcommands.flags]]
+name = "--branch"
+short = "-b"
+arg = "BRANCH"
+description = "Clone specific branch"
+
+[[command.subcommands]]
+name = "remote"
+description = "Manage remotes"
+[[command.subcommands.subcommands]]
+name = "add"
+description = "Add remote"
+[[command.subcommands.subcommands]]
+name = "remove"
+description = "Remove remote"
+[[command.subcommands.flags]]
+name = "--verbose"
+short = "-v"
+description = "Show URLs"
+
+[[command.subcommands]]
+name = "reset"
+description = "Reset current HEAD"
+[[command.subcommands.flags]]
+name = "--hard"
+description = "Reset working tree and index"
+[[command.subcommands.flags]]
+name = "--soft"
+description = "Keep changes staged"
+[[command.subcommands.flags]]
+name = "--mixed"
+description = "Keep changes unstaged"
+
+[[command.subcommands]]
+name = "tag"
+description = "Create, list, or delete tags"
+[[command.subcommands.flags]]
+name = "--annotate"
+short = "-a"
+description = "Create annotated tag"
+[[command.subcommands.flags]]
+name = "--delete"
+short = "-d"
+description = "Delete tag"
+[[command.subcommands.flags]]
+name = "--message"
+short = "-m"
+arg = "MSG"
+description = "Tag message"
+
+[[command.subcommands]]
+name = "switch"
+description = "Switch branches"
+[[command.subcommands.flags]]
+name = "--create"
+short = "-c"
+arg = "BRANCH"
+description = "Create and switch"

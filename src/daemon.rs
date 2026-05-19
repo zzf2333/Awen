@@ -1,0 +1,301 @@
+use crate::arbitrator::Arbitrator;
+use crate::config::{self, AwenConfig};
+use crate::context::ContextEngine;
+use crate::layer::ai;
+use crate::layer::failure::FailureLayer;
+use crate::layer::history::HistoryLayer;
+use crate::layer::risk::RiskLayer;
+use crate::layer::specs::SpecsLayer;
+use crate::protocol::*;
+
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::UnixListener;
+use tokio::sync::Mutex;
+
+struct DaemonState {
+    context: ContextEngine,
+    history: HistoryLayer,
+    specs: SpecsLayer,
+    failure: FailureLayer,
+    risk: RiskLayer,
+    ai_provider: Option<Box<dyn ai::AiProvider>>,
+    config: AwenConfig,
+    start_time: std::time::Instant,
+}
+
+pub async fn run(config: AwenConfig) {
+    let socket_path = config::socket_path();
+    if socket_path.exists() {
+        std::fs::remove_file(&socket_path).ok();
+    }
+
+    if let Some(parent) = socket_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    write_pid();
+
+    let history = match HistoryLayer::new(&config::history_db_path()) {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::error!("failed to open history db: {e}");
+            eprintln!("failed to open history db: {e}");
+            return;
+        }
+    };
+
+    let mut specs = SpecsLayer::new();
+    specs.load_builtin_specs();
+    specs.load_user_specs(&config::config_dir().join("specs"));
+
+    let mut failure = FailureLayer::new();
+    failure.load_user_patterns(&config::config_dir().join("failure_patterns.toml"));
+
+    let mut risk = RiskLayer::new();
+    risk.load_user_patterns(&config::config_dir().join("risk_patterns.toml"));
+
+    let ai_provider = ai::create_provider(&config);
+
+    let state = Arc::new(Mutex::new(DaemonState {
+        context: ContextEngine::new(&config),
+        history,
+        specs,
+        failure,
+        risk,
+        ai_provider,
+        config: config.clone(),
+        start_time: std::time::Instant::now(),
+    }));
+
+    let listener = match UnixListener::bind(&socket_path) {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("failed to bind socket: {e}");
+            eprintln!("failed to bind socket at {}: {e}", socket_path.display());
+            return;
+        }
+    };
+
+    tracing::info!("listening on {}", socket_path.display());
+    println!("awen daemon running (socket: {})", socket_path.display());
+
+    let shutdown = Arc::new(tokio::sync::Notify::new());
+    let shutdown_clone = shutdown.clone();
+
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        shutdown_clone.notify_one();
+    });
+
+    loop {
+        tokio::select! {
+            accept = listener.accept() => {
+                match accept {
+                    Ok((stream, _)) => {
+                        let state = state.clone();
+                        let shutdown = shutdown.clone();
+                        tokio::spawn(async move {
+                            handle_connection(stream, state, shutdown).await;
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!("accept error: {e}");
+                    }
+                }
+            }
+            _ = shutdown.notified() => {
+                tracing::info!("shutting down");
+                break;
+            }
+        }
+    }
+
+    std::fs::remove_file(&socket_path).ok();
+    cleanup_pid();
+    println!("awen daemon stopped");
+}
+
+async fn handle_connection(
+    stream: tokio::net::UnixStream,
+    state: Arc<Mutex<DaemonState>>,
+    shutdown: Arc<tokio::sync::Notify>,
+) {
+    let (reader, mut writer) = stream.into_split();
+    let mut reader = BufReader::new(reader);
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        match reader.read_line(&mut line).await {
+            Ok(0) => break,
+            Ok(_) => {
+                let response = match serde_json::from_str::<Request>(line.trim()) {
+                    Ok(request) => process_request(request, &state, &shutdown).await,
+                    Err(e) => Response::Error {
+                        message: format!("invalid request: {e}"),
+                    },
+                };
+
+                let mut resp_json = serde_json::to_string(&response).unwrap();
+                resp_json.push('\n');
+                if writer.write_all(resp_json.as_bytes()).await.is_err() {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+}
+
+async fn process_request(
+    request: Request,
+    state: &Arc<Mutex<DaemonState>>,
+    shutdown: &Arc<tokio::sync::Notify>,
+) -> Response {
+    match request {
+        Request::Suggest(req) => handle_suggest(req, state).await,
+        Request::Record(req) => handle_record(req, state).await,
+        Request::Status => handle_status(state).await,
+        Request::Context => handle_context(state).await,
+        Request::Shutdown => {
+            shutdown.notify_one();
+            Response::Ok
+        }
+    }
+}
+
+async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
+    let mut state = state.lock().await;
+
+    state.context.update_cwd(req.context.cwd.clone());
+
+    let mut suggestions = Vec::new();
+
+    let history_results = state.history.suggest(&req.input, &req.context.cwd, 5);
+    suggestions.extend(history_results);
+
+    let specs_results = state.specs.suggest(&req.input, req.cursor_pos);
+    suggestions.extend(specs_results);
+
+    let mut hint = None;
+    if let Some(exit_code) = req.context.last_exit_code
+        && exit_code != 0
+        && let Some(stderr) = &req.context.last_stderr
+        && let Some((fail_suggestion, fail_hint)) = state.failure.match_failure(stderr, exit_code)
+    {
+        suggestions.push(fail_suggestion);
+        hint = Some(fail_hint);
+    }
+
+    let warning = if state.config.ui.risk_detection {
+        state.risk.check(&req.input)
+    } else {
+        None
+    };
+
+    let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
+
+    Response::Suggest(response)
+}
+
+async fn handle_record(req: RecordCommandRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
+    let mut state = state.lock().await;
+
+    state.context.record_command(
+        req.command.clone(),
+        req.exit_code,
+        req.stderr.clone(),
+        req.cwd.clone(),
+        req.duration_ms,
+    );
+
+    if let Err(e) = state.history.record(&req.command, &req.cwd, req.exit_code) {
+        tracing::warn!("failed to record command: {e}");
+    }
+
+    Response::Ok
+}
+
+async fn handle_status(state: &Arc<Mutex<DaemonState>>) -> Response {
+    let state = state.lock().await;
+    Response::Status(StatusResponse {
+        running: true,
+        pid: std::process::id(),
+        uptime_secs: state.start_time.elapsed().as_secs(),
+        history_count: state.history.count(),
+        ai_enabled: state.config.ai.enabled,
+    })
+}
+
+async fn handle_context(state: &Arc<Mutex<DaemonState>>) -> Response {
+    let mut state = state.lock().await;
+    let ctx = state.context.build_context_response();
+    Response::Context(ctx)
+}
+
+pub fn is_running() -> bool {
+    let socket_path = config::socket_path();
+    if !socket_path.exists() {
+        return false;
+    }
+    std::os::unix::net::UnixStream::connect(&socket_path).is_ok()
+}
+
+pub fn read_pid() -> Option<u32> {
+    let pid_path = config::pid_path();
+    std::fs::read_to_string(pid_path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+fn write_pid() {
+    let pid_path = config::pid_path();
+    if let Some(parent) = pid_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    std::fs::write(pid_path, std::process::id().to_string()).ok();
+}
+
+fn cleanup_pid() {
+    std::fs::remove_file(config::pid_path()).ok();
+}
+
+pub fn cleanup_socket() {
+    std::fs::remove_file(config::socket_path()).ok();
+    cleanup_pid();
+}
+
+pub async fn send_shutdown() -> Result<(), Box<dyn std::error::Error>> {
+    let response = send_request(&Request::Shutdown).await?;
+    match response {
+        Response::Ok => Ok(()),
+        Response::Error { message } => Err(message.into()),
+        _ => Err("unexpected response".into()),
+    }
+}
+
+pub async fn send_status_request() -> Result<Response, Box<dyn std::error::Error>> {
+    send_request(&Request::Status).await
+}
+
+pub async fn send_context_request() -> Result<Response, Box<dyn std::error::Error>> {
+    send_request(&Request::Context).await
+}
+
+async fn send_request(request: &Request) -> Result<Response, Box<dyn std::error::Error>> {
+    let socket_path = config::socket_path();
+    let stream = tokio::net::UnixStream::connect(&socket_path).await?;
+    let (reader, mut writer) = stream.into_split();
+
+    let mut json = serde_json::to_string(request)?;
+    json.push('\n');
+    writer.write_all(json.as_bytes()).await?;
+
+    let mut reader = BufReader::new(reader);
+    let mut line = String::new();
+    reader.read_line(&mut line).await?;
+
+    let response: Response = serde_json::from_str(line.trim())?;
+    Ok(response)
+}

@@ -1,0 +1,97 @@
+[command]
+name = "npm"
+description = "Node package manager"
+
+[[command.subcommands]]
+name = "install"
+description = "Install packages"
+[[command.subcommands.flags]]
+name = "--save-dev"
+short = "-D"
+description = "Save as dev dependency"
+[[command.subcommands.flags]]
+name = "--global"
+short = "-g"
+description = "Install globally"
+[[command.subcommands.flags]]
+name = "--save-exact"
+short = "-E"
+description = "Save exact version"
+[[command.subcommands.flags]]
+name = "--legacy-peer-deps"
+description = "Ignore peer dependency issues"
+
+[[command.subcommands]]
+name = "run"
+description = "Run script"
+
+[[command.subcommands]]
+name = "test"
+description = "Run tests"
+
+[[command.subcommands]]
+name = "start"
+description = "Start application"
+
+[[command.subcommands]]
+name = "init"
+description = "Create package.json"
+[[command.subcommands.flags]]
+name = "--yes"
+short = "-y"
+description = "Skip questionnaire"
+
+[[command.subcommands]]
+name = "uninstall"
+description = "Remove package"
+[[command.subcommands.flags]]
+name = "--save-dev"
+short = "-D"
+description = "Remove from dev dependencies"
+
+[[command.subcommands]]
+name = "update"
+description = "Update packages"
+
+[[command.subcommands]]
+name = "outdated"
+description = "Check for outdated packages"
+
+[[command.subcommands]]
+name = "list"
+description = "List installed packages"
+[[command.subcommands.flags]]
+name = "--depth"
+arg = "N"
+description = "Dependency depth"
+
+[[command.subcommands]]
+name = "publish"
+description = "Publish package"
+[[command.subcommands.flags]]
+name = "--access"
+arg = "ACCESS"
+description = "Set access level"
+[[command.subcommands.flags]]
+name = "--tag"
+arg = "TAG"
+description = "Publish tag"
+
+[[command.subcommands]]
+name = "audit"
+description = "Run security audit"
+[[command.subcommands.flags]]
+name = "--fix"
+description = "Fix vulnerabilities"
+
+[[command.subcommands]]
+name = "ci"
+description = "Clean install for CI"
+
+[[command.subcommands]]
+name = "exec"
+description = "Run a command from a local or remote package"
+
+[[command.subcommands]]
+name = "link"
+description = "Symlink a package"

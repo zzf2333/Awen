@@ -1,0 +1,196 @@
+[command]
+name = "docker"
+description = "Container management tool"
+
+[[command.subcommands]]
+name = "run"
+description = "Run a container"
+[[command.subcommands.flags]]
+name = "--publish"
+short = "-p"
+arg = "HOST:CONTAINER"
+description = "Map port"
+[[command.subcommands.flags]]
+name = "--volume"
+short = "-v"
+arg = "HOST:CONTAINER"
+description = "Mount volume"
+[[command.subcommands.flags]]
+name = "--env"
+short = "-e"
+arg = "KEY=VALUE"
+description = "Set environment variable"
+[[command.subcommands.flags]]
+name = "--detach"
+short = "-d"
+description = "Run in background"
+[[command.subcommands.flags]]
+name = "--interactive"
+short = "-i"
+description = "Keep STDIN open"
+[[command.subcommands.flags]]
+name = "--tty"
+short = "-t"
+description = "Allocate pseudo-TTY"
+[[command.subcommands.flags]]
+name = "--name"
+arg = "NAME"
+description = "Container name"
+[[command.subcommands.flags]]
+name = "--rm"
+description = "Remove on exit"
+[[command.subcommands.flags]]
+name = "--network"
+arg = "NETWORK"
+description = "Connect to network"
+[[command.subcommands.flags]]
+name = "--restart"
+arg = "POLICY"
+description = "Restart policy"
+
+[[command.subcommands]]
+name = "build"
+description = "Build an image"
+[[command.subcommands.flags]]
+name = "--tag"
+short = "-t"
+arg = "NAME:TAG"
+description = "Image tag"
+[[command.subcommands.flags]]
+name = "--file"
+short = "-f"
+arg = "DOCKERFILE"
+description = "Dockerfile path"
+[[command.subcommands.flags]]
+name = "--no-cache"
+description = "Build without cache"
+[[command.subcommands.flags]]
+name = "--build-arg"
+arg = "KEY=VALUE"
+description = "Build argument"
+
+[[command.subcommands]]
+name = "ps"
+description = "List containers"
+[[command.subcommands.flags]]
+name = "--all"
+short = "-a"
+description = "Show all containers"
+[[command.subcommands.flags]]
+name = "--quiet"
+short = "-q"
+description = "Only show IDs"
+
+[[command.subcommands]]
+name = "images"
+description = "List images"
+[[command.subcommands.flags]]
+name = "--all"
+short = "-a"
+description = "Show all images"
+
+[[command.subcommands]]
+name = "exec"
+description = "Execute command in container"
+[[command.subcommands.flags]]
+name = "--interactive"
+short = "-i"
+description = "Keep STDIN open"
+[[command.subcommands.flags]]
+name = "--tty"
+short = "-t"
+description = "Allocate pseudo-TTY"
+
+[[command.subcommands]]
+name = "stop"
+description = "Stop container"
+
+[[command.subcommands]]
+name = "rm"
+description = "Remove container"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force remove"
+
+[[command.subcommands]]
+name = "rmi"
+description = "Remove image"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force remove"
+
+[[command.subcommands]]
+name = "logs"
+description = "Show container logs"
+[[command.subcommands.flags]]
+name = "--follow"
+short = "-f"
+description = "Follow log output"
+[[command.subcommands.flags]]
+name = "--tail"
+arg = "N"
+description = "Number of lines"
+
+[[command.subcommands]]
+name = "compose"
+description = "Docker Compose"
+[[command.subcommands.subcommands]]
+name = "up"
+description = "Create and start services"
+[[command.subcommands.subcommands]]
+name = "down"
+description = "Stop and remove services"
+[[command.subcommands.subcommands]]
+name = "build"
+description = "Build services"
+[[command.subcommands.subcommands]]
+name = "logs"
+description = "View service logs"
+[[command.subcommands.subcommands]]
+name = "ps"
+description = "List services"
+[[command.subcommands.flags]]
+name = "--detach"
+short = "-d"
+description = "Run in background"
+[[command.subcommands.flags]]
+name = "--file"
+short = "-f"
+arg = "FILE"
+description = "Compose file"
+
+[[command.subcommands]]
+name = "pull"
+description = "Pull image"
+
+[[command.subcommands]]
+name = "push"
+description = "Push image"
+
+[[command.subcommands]]
+name = "network"
+description = "Manage networks"
+[[command.subcommands.subcommands]]
+name = "create"
+description = "Create network"
+[[command.subcommands.subcommands]]
+name = "ls"
+description = "List networks"
+[[command.subcommands.subcommands]]
+name = "rm"
+description = "Remove network"
+
+[[command.subcommands]]
+name = "volume"
+description = "Manage volumes"
+[[command.subcommands.subcommands]]
+name = "create"
+description = "Create volume"
+[[command.subcommands.subcommands]]
+name = "ls"
+description = "List volumes"
+[[command.subcommands.subcommands]]
+name = "rm"
+description = "Remove volume"

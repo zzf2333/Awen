@@ -1,0 +1,188 @@
+use crate::protocol::{Suggestion, SuggestionSource};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher};
+use rusqlite::{Connection, params};
+use std::path::{Path, PathBuf};
+
+pub struct HistoryLayer {
+    db_path: PathBuf,
+}
+
+impl HistoryLayer {
+    pub fn new(db_path: &Path) -> Result<Self, rusqlite::Error> {
+        let conn = Connection::open(db_path)?;
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS commands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command TEXT NOT NULL,
+                cwd TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                exit_code INTEGER NOT NULL DEFAULT 0,
+                count INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(command, cwd)
+            );
+            CREATE INDEX IF NOT EXISTS idx_commands_command ON commands(command);
+            CREATE INDEX IF NOT EXISTS idx_commands_cwd ON commands(cwd);
+            CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);",
+        )?;
+        Ok(Self {
+            db_path: db_path.to_path_buf(),
+        })
+    }
+
+    pub fn record(&self, command: &str, cwd: &str, exit_code: i32) -> Result<(), rusqlite::Error> {
+        let conn = Connection::open(&self.db_path)?;
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "INSERT INTO commands (command, cwd, timestamp, exit_code, count)
+             VALUES (?1, ?2, ?3, ?4, 1)
+             ON CONFLICT(command, cwd) DO UPDATE SET
+                count = count + 1,
+                timestamp = ?3,
+                exit_code = ?4",
+            params![command, cwd, now, exit_code],
+        )?;
+        Ok(())
+    }
+
+    pub fn suggest(&self, input: &str, cwd: &str, limit: usize) -> Vec<Suggestion> {
+        if input.is_empty() {
+            return Vec::new();
+        }
+
+        let conn = match Connection::open(&self.db_path) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT command, cwd, timestamp, count FROM commands
+                 ORDER BY timestamp DESC LIMIT 500",
+            )
+            .unwrap();
+
+        let rows: Vec<(String, String, i64, i64)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = Pattern::parse(input, CaseMatching::Smart, Normalization::Smart);
+
+        let now = chrono::Utc::now().timestamp();
+        let mut scored: Vec<(f64, String)> = Vec::new();
+
+        for (command, cmd_cwd, timestamp, count) in &rows {
+            let mut buf = Vec::new();
+            let haystack = nucleo_matcher::Utf32Str::new(command, &mut buf);
+            if let Some(match_score) = pattern.score(haystack, &mut matcher) {
+                let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
+                let recency_decay = 1.0 / age_hours.ln().max(1.0);
+                let frequency_boost = (*count as f64).ln().max(1.0);
+                let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
+
+                let score = match_score as f64 * recency_decay * frequency_boost * dir_affinity;
+                scored.push((score, command.clone()));
+            }
+        }
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.dedup_by(|a, b| a.1 == b.1);
+
+        let max_score = scored.first().map(|s| s.0).unwrap_or(1.0).max(1.0);
+
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(score, text)| Suggestion {
+                text,
+                source: SuggestionSource::History,
+                confidence: (score / max_score).min(1.0),
+                description: None,
+            })
+            .collect()
+    }
+
+    pub fn count(&self) -> u64 {
+        let conn = match Connection::open(&self.db_path) {
+            Ok(c) => c,
+            Err(_) => return 0,
+        };
+        conn.query_row("SELECT COUNT(*) FROM commands", [], |row| row.get(0))
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, HistoryLayer) {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("history.db");
+        let layer = HistoryLayer::new(&db_path).unwrap();
+        (dir, layer)
+    }
+
+    #[test]
+    fn test_record_and_count() {
+        let (_dir, layer) = setup();
+        layer.record("ls -la", "/tmp", 0).unwrap();
+        layer.record("pwd", "/tmp", 0).unwrap();
+        assert_eq!(layer.count(), 2);
+    }
+
+    #[test]
+    fn test_record_dedup() {
+        let (_dir, layer) = setup();
+        layer.record("ls -la", "/tmp", 0).unwrap();
+        layer.record("ls -la", "/tmp", 0).unwrap();
+        assert_eq!(layer.count(), 1);
+    }
+
+    #[test]
+    fn test_suggest_prefix() {
+        let (_dir, layer) = setup();
+        layer.record("docker build .", "/app", 0).unwrap();
+        layer
+            .record("docker run -p 3000:3000 app", "/app", 0)
+            .unwrap();
+        layer.record("npm install", "/app", 0).unwrap();
+
+        let results = layer.suggest("docker", "/app", 5);
+        assert!(!results.is_empty());
+        assert!(
+            results
+                .iter()
+                .all(|s| s.source == SuggestionSource::History)
+        );
+    }
+
+    #[test]
+    fn test_suggest_empty_input() {
+        let (_dir, layer) = setup();
+        layer.record("ls", "/tmp", 0).unwrap();
+        let results = layer.suggest("", "/tmp", 5);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_suggest_directory_affinity() {
+        let (_dir, layer) = setup();
+        layer.record("make build", "/project-a", 0).unwrap();
+        layer.record("make test", "/project-b", 0).unwrap();
+
+        let results = layer.suggest("make", "/project-a", 5);
+        assert!(!results.is_empty());
+    }
+}
