@@ -186,7 +186,9 @@ _awen_render_hint() {
 
 _awen_now_ms() {
     if [[ "$_AWEN_HAS_ZDATE" == "1" ]]; then
-        printf '%d' $(( ${EPOCHREALTIME//.} / 1000 ))
+        local secs="${EPOCHREALTIME%.*}"
+        local frac="${EPOCHREALTIME#*.}"
+        printf '%s' "${secs}${frac:0:3}"
     else
         printf '%d' $(( $(date +%s) * 1000 ))
     fi
