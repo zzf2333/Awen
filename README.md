@@ -209,22 +209,25 @@ Awen's security model is minimal because it **always suggests, never executes**:
 
 ## Development
 
-### Build
+### Quick Iteration
+
+```bash
+make dev       # Debug build + sync plugin + restart daemon (fastest)
+make release   # Release build + sync + restart
+make sync      # Sync plugin/specs only (no rebuild, for zsh-only changes)
+make test      # cargo test + shellcheck + zsh smoke tests
+make lint      # clippy + fmt + shellcheck
+make status    # Check daemon status
+make logs      # Show recent daemon logs
+```
+
+`make dev` is the primary dev loop — one command to build, deploy, and restart. Changes are live in the current shell immediately.
+
+### Manual Build
 
 ```bash
 cargo build
-```
-
-### Test
-
-```bash
-cargo test                         # Rust unit + E2E tests
-zsh tests/zsh_smoke_test.zsh       # zsh plugin smoke tests
-```
-
-### Lint
-
-```bash
+cargo test
 cargo clippy
 cargo fmt --check
 ```
