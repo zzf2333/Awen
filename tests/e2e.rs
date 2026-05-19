@@ -1,8 +1,10 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use awen::config::AwenConfig;
 use awen::daemon::{self, DaemonPaths};
+use awen::layer::ai::{AiError, AiProvider};
 use awen::protocol::*;
 
 fn test_paths(dir: &std::path::Path) -> DaemonPaths {
@@ -26,15 +28,35 @@ struct TestDaemon {
     _dir: tempfile::TempDir,
 }
 
+struct SlowMockProvider;
+
+#[async_trait::async_trait]
+impl AiProvider for SlowMockProvider {
+    async fn complete(&self, _prompt: &str, _max_tokens: u32) -> Result<String, AiError> {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        Ok("mock-slow-result".into())
+    }
+}
+
 impl TestDaemon {
     async fn start() -> Self {
+        Self::start_with_config_and_ai(test_config(), None).await
+    }
+
+    async fn start_with_ai(config: AwenConfig, provider: Arc<dyn AiProvider>) -> Self {
+        Self::start_with_config_and_ai(config, Some(provider)).await
+    }
+
+    async fn start_with_config_and_ai(
+        config: AwenConfig,
+        ai_override: Option<Arc<dyn AiProvider>>,
+    ) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let paths = test_paths(dir.path());
         let socket_path = paths.socket.clone();
-        let config = test_config();
 
         tokio::spawn(async move {
-            daemon::run_on_paths(config, &paths).await;
+            daemon::run_on_paths_with_ai(config, &paths, ai_override).await;
         });
 
         for _ in 0..50 {
@@ -743,6 +765,131 @@ async fn test_risk_warning_with_suggestions_coexist() {
             assert!(s.warning.is_some(), "risk warning should be present");
         }
         other => panic!("expected Suggest, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+// ============================================================
+// AI fallback tests
+// ============================================================
+
+#[tokio::test]
+async fn test_ai_disabled_local_suggestions_work() {
+    let daemon = TestDaemon::start().await;
+
+    daemon
+        .send(&Request::Record(RecordCommandRequest {
+            command: "cargo build --release".into(),
+            exit_code: 0,
+            stderr: None,
+            cwd: "/home/user/project".into(),
+            duration_ms: Some(5000),
+        }))
+        .await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "cargo".into(),
+        cursor_pos: 5,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                !s.suggestions.is_empty(),
+                "should get local suggestions even with AI disabled"
+            );
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "no suggestion should come from AI when disabled"
+            );
+            let has_local = s.suggestions.iter().any(|sg| {
+                sg.source == SuggestionSource::History || sg.source == SuggestionSource::Specs
+            });
+            assert!(has_local, "should have history or specs suggestions");
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_ai_timeout_returns_local_suggestions() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider: Arc<dyn AiProvider> = Arc::new(SlowMockProvider);
+    let daemon = TestDaemon::start_with_ai(config, provider).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "git ch".into(),
+        cursor_pos: 6,
+        context: RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+    });
+
+    let start = std::time::Instant::now();
+    let resp = daemon.send(&req).await;
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "response should arrive within 1s despite slow AI (took {:?})",
+        elapsed
+    );
+
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                !s.suggestions.is_empty(),
+                "should still get local suggestions when AI times out"
+            );
+            let has_specs = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Specs);
+            assert!(
+                has_specs,
+                "should have specs suggestions for 'git ch', got: {:?}",
+                s.suggestions
+                    .iter()
+                    .map(|sg| &sg.source)
+                    .collect::<Vec<_>>()
+            );
+            let has_ai = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Ai);
+            assert!(!has_ai, "AI suggestion should not be present (timed out)");
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
     }
 
     daemon.shutdown().await;

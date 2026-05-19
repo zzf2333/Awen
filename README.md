@@ -212,7 +212,8 @@ cargo build
 ### Test
 
 ```bash
-cargo test
+cargo test                         # Rust unit + E2E tests
+zsh tests/zsh_smoke_test.zsh       # zsh plugin smoke tests
 ```
 
 ### Lint

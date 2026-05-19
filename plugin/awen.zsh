@@ -24,7 +24,7 @@ _awen_extract_json_value() {
         prev_ch="$ch"
         ((i++))
     done
-    echo "$result"
+    printf '%s\n' "$result"
 }
 
 _awen_json_escape() {
@@ -34,7 +34,7 @@ _awen_json_escape() {
     s="${s//$'\n'/\\n}"
     s="${s//$'\r'/\\r}"
     s="${s//$'\t'/\\t}"
-    echo -n "$s"
+    printf '%s' "$s"
 }
 
 _awen_find_binary() {

@@ -212,7 +212,8 @@ cargo build
 ### 测试
 
 ```bash
-cargo test
+cargo test                         # Rust 单元测试 + E2E 测试
+zsh tests/zsh_smoke_test.zsh       # zsh 插件冒烟测试
 ```
 
 ### 代码检查

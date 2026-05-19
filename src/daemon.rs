@@ -68,6 +68,14 @@ pub struct DaemonPaths {
 }
 
 pub async fn run_on_paths(config: AwenConfig, paths: &DaemonPaths) {
+    run_on_paths_with_ai(config, paths, None).await;
+}
+
+pub async fn run_on_paths_with_ai(
+    config: AwenConfig,
+    paths: &DaemonPaths,
+    ai_override: Option<Arc<dyn ai::AiProvider>>,
+) {
     if paths.socket.exists() {
         std::fs::remove_file(&paths.socket).ok();
     }
@@ -95,7 +103,7 @@ pub async fn run_on_paths(config: AwenConfig, paths: &DaemonPaths) {
     let mut risk = RiskLayer::new();
     risk.load_user_patterns(&paths.config_dir.join("risk_patterns.toml"));
 
-    let ai_provider = ai::create_provider(&config);
+    let ai_provider = ai_override.or_else(|| ai::create_provider(&config));
 
     let state = Arc::new(Mutex::new(DaemonState {
         context: ContextEngine::new(&config),

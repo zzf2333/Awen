@@ -31,3 +31,5 @@ jobs:
         run: shellcheck install.sh
       - name: Check zsh plugin syntax
         run: zsh -n plugin/awen.zsh
+      - name: Run zsh smoke tests
+        run: zsh tests/zsh_smoke_test.zsh
