@@ -8,6 +8,7 @@ typeset -g _AWEN_WARNING=""
 typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
+typeset -g _AWEN_GHOST_HIGHLIGHT=""
 
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
@@ -100,6 +101,11 @@ _awen_send_nc() {
 _awen_clear_ghost() {
     if [[ -n "$_AWEN_SUGGESTION" ]]; then
         _AWEN_SUGGESTION=""
+        if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+            region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+            _AWEN_GHOST_HIGHLIGHT=""
+        fi
+        POSTDISPLAY=""
         zle -R
     fi
 }
@@ -111,8 +117,16 @@ _awen_clear_hint() {
 
 _awen_render_ghost() {
     local suggestion="$1"
+
+    # Remove previous ghost highlight
+    if [[ -n "$_AWEN_GHOST_HIGHLIGHT" ]]; then
+        region_highlight=("${(@)region_highlight:#$_AWEN_GHOST_HIGHLIGHT}")
+        _AWEN_GHOST_HIGHLIGHT=""
+    fi
+
     if [[ -z "$suggestion" ]]; then
         _AWEN_SUGGESTION=""
+        POSTDISPLAY=""
         return
     fi
 
@@ -124,15 +138,14 @@ _awen_render_ghost() {
     # If suggestion is a completion of current input, show only the remaining part
     if [[ "$suggestion" == "$input"* ]]; then
         ghost_part="${suggestion#$input}"
-    elif [[ "${input}${suggestion}" ]]; then
+    elif [[ -n "${input}${suggestion}" ]]; then
         ghost_part="$suggestion"
     fi
 
     if [[ -n "$ghost_part" ]]; then
-        # Render ghost text in gray (color 242)
-        local gray=$'\e[38;5;242m'
-        local reset=$'\e[0m'
-        POSTDISPLAY="${gray}${ghost_part}${reset}"
+        POSTDISPLAY="$ghost_part"
+        _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) fg=242"
+        region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
     else
         POSTDISPLAY=""
     fi
