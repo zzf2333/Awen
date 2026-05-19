@@ -22,6 +22,34 @@ struct DaemonState {
     ai_provider: Option<Arc<dyn ai::AiProvider>>,
     config: AwenConfig,
     start_time: std::time::Instant,
+    last_ai_request_at: Option<std::time::Instant>,
+    last_ai_input: Option<String>,
+}
+
+fn should_request_ai(
+    input: &str,
+    has_warning: bool,
+    max_local_confidence: f64,
+    last_ai_input: Option<&str>,
+    last_ai_request_at: Option<std::time::Instant>,
+    debounce_ms: u64,
+) -> bool {
+    if input.len() < 3 {
+        return false;
+    }
+    if has_warning {
+        return false;
+    }
+    if max_local_confidence >= 0.9 {
+        return false;
+    }
+    if let Some(last_at) = last_ai_request_at {
+        let elapsed = last_at.elapsed().as_millis() as u64;
+        if elapsed < debounce_ms && last_ai_input == Some(input) {
+            return false;
+        }
+    }
+    true
 }
 
 pub async fn run(config: AwenConfig) {
@@ -80,6 +108,8 @@ pub async fn run_on_paths(config: AwenConfig, paths: &DaemonPaths) {
         ai_provider,
         config: config.clone(),
         start_time: std::time::Instant::now(),
+        last_ai_request_at: None,
+        last_ai_input: None,
     }));
 
     let listener = match UnixListener::bind(&paths.socket) {
@@ -179,7 +209,16 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let (mut response, ai_provider, max_tokens, stderr_max_chars) = {
+    let (
+        mut response,
+        ai_provider,
+        max_tokens,
+        stderr_max_chars,
+        has_warning,
+        debounce_ms,
+        last_ai_input,
+        last_ai_request_at,
+    ) = {
         let mut state = state.lock().await;
         state.context.update_cwd(req.context.cwd.clone());
 
@@ -208,16 +247,42 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             None
         };
 
+        let has_warning = warning.is_some();
         let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
         let ai_provider = state.ai_provider.clone();
         let max_tokens = state.config.ai.max_tokens;
         let stderr_max_chars = state.config.context.stderr_max_chars;
+        let debounce_ms = state.config.ai.debounce_ms;
+        let last_ai_input = state.last_ai_input.as_deref().map(String::from);
+        let last_ai_request_at = state.last_ai_request_at;
 
-        (response, ai_provider, max_tokens, stderr_max_chars)
+        (
+            response,
+            ai_provider,
+            max_tokens,
+            stderr_max_chars,
+            has_warning,
+            debounce_ms,
+            last_ai_input,
+            last_ai_request_at,
+        )
     };
 
     if let Some(provider) = ai_provider {
-        if !req.input.is_empty() {
+        let max_local_confidence = response
+            .suggestions
+            .iter()
+            .map(|s| s.confidence)
+            .fold(0.0_f64, f64::max);
+
+        if should_request_ai(
+            &req.input,
+            has_warning,
+            max_local_confidence,
+            last_ai_input.as_deref(),
+            last_ai_request_at,
+            debounce_ms,
+        ) {
             let mut ctx = req.context.clone();
             crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
 
@@ -241,6 +306,10 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
                     tracing::debug!("AI completion timed out");
                 }
             }
+
+            let mut state = state.lock().await;
+            state.last_ai_request_at = Some(std::time::Instant::now());
+            state.last_ai_input = Some(req.input.clone());
         }
     }
 
@@ -352,4 +421,74 @@ pub async fn send_request_to(
 
     let response: Response = serde_json::from_str(line.trim())?;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_request_ai_short_input() {
+        assert!(!should_request_ai("gi", false, 0.0, None, None, 300));
+        assert!(!should_request_ai("ab", false, 0.0, None, None, 300));
+    }
+
+    #[test]
+    fn test_should_request_ai_warning_present() {
+        assert!(!should_request_ai("rm -rf /", true, 0.0, None, None, 300));
+    }
+
+    #[test]
+    fn test_should_request_ai_high_confidence() {
+        assert!(!should_request_ai(
+            "git checkout",
+            false,
+            0.95,
+            None,
+            None,
+            300
+        ));
+        assert!(!should_request_ai(
+            "git checkout",
+            false,
+            0.9,
+            None,
+            None,
+            300
+        ));
+    }
+
+    #[test]
+    fn test_should_request_ai_debounce_same_input() {
+        let recent = std::time::Instant::now();
+        assert!(!should_request_ai(
+            "docker run",
+            false,
+            0.0,
+            Some("docker run"),
+            Some(recent),
+            300,
+        ));
+    }
+
+    #[test]
+    fn test_should_request_ai_happy_path() {
+        assert!(should_request_ai("docker run", false, 0.5, None, None, 300));
+        assert!(should_request_ai(
+            "git checkout",
+            false,
+            0.89,
+            None,
+            None,
+            300
+        ));
+        assert!(should_request_ai(
+            "cargo build",
+            false,
+            0.0,
+            Some("cargo test"),
+            Some(std::time::Instant::now()),
+            300,
+        ));
+    }
 }
