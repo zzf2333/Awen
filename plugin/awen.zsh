@@ -133,15 +133,23 @@ _awen_reconstruct_full_cmd() {
     local input="$1" suggestion="$2"
     if [[ "$suggestion" == "$input"* ]]; then
         printf '%s' "$suggestion"
+        return
+    fi
+    local input_cmd="${input%% *}"
+    local sugg_cmd="${suggestion%% *}"
+    if [[ -n "$input_cmd" && "$input_cmd" == "$sugg_cmd" ]]; then
+        printf '%s' "$suggestion"
+        return
+    fi
+    local last_word="${input##* }"
+    if [[ -n "$last_word" && "$suggestion" == "$last_word"* ]]; then
+        printf '%s' "${input%$last_word}${suggestion}"
+        return
+    fi
+    if [[ "$input" == *" " ]]; then
+        printf '%s' "${input}${suggestion}"
     else
-        local last_word="${input##* }"
-        if [[ -n "$last_word" && "$suggestion" == "$last_word"* ]]; then
-            printf '%s' "${input%$last_word}${suggestion}"
-        elif [[ "$input" == *" " ]]; then
-            printf '%s' "${input}${suggestion}"
-        else
-            printf '%s' "${input} ${suggestion}"
-        fi
+        printf '%s' "${input} ${suggestion}"
     fi
 }
 
@@ -523,6 +531,11 @@ _awen_apply_ai() {
         CURSOR=${#BUFFER}
     fi
 
+    # Abort if user has changed input since AI request was sent
+    if [[ -n "$_AWEN_AI_SNAPSHOT" && "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]]; then
+        return
+    fi
+
     # Remember current selection to preserve across refresh
     local prev_selected=""
     if (( _AWEN_MENU_ACTIVE )); then
@@ -558,7 +571,6 @@ _awen_accept() {
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
-        zle -M ""
         zle -R
     elif [[ -n "$_AWEN_SUGGESTION" ]]; then
         _awen_cancel_pending_ai
@@ -618,17 +630,14 @@ _awen_accept_word() {
 
 # Dismiss suggestion
 _awen_dismiss() {
-    if (( _AWEN_MENU_ACTIVE )) || [[ -n "$_AWEN_SUGGESTION" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
-        _awen_cancel_pending_ai
+    _awen_cancel_pending_ai
+    if (( _AWEN_MENU_ACTIVE )) || [[ -n "$_AWEN_SUGGESTION" || -n "$POSTDISPLAY" || -n "$_AWEN_HINT" || -n "$_AWEN_WARNING" ]]; then
         _awen_remove_ghost_highlight
         _awen_menu_reset
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
-        zle -M ""
         zle -R
-    else
-        zle send-break
     fi
 }
 
@@ -763,7 +772,6 @@ _awen_menu_accept() {
         _AWEN_SUGGESTION=""
         POSTDISPLAY=""
         _awen_clear_hint
-        zle -M ""
         zle -R
     else
         zle accept-line

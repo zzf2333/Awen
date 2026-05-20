@@ -36,6 +36,10 @@ impl HistoryLayer {
     }
 
     pub fn record(&self, command: &str, cwd: &str, exit_code: i32) -> Result<(), rusqlite::Error> {
+        let trimmed = command.trim();
+        if trimmed.is_empty() || trimmed.len() > 500 {
+            return Ok(());
+        }
         if is_sensitive_command(command) {
             tracing::debug!("skipping sensitive command in history");
             return Ok(());
@@ -90,16 +94,28 @@ impl HistoryLayer {
         let now = chrono::Utc::now().timestamp();
         let mut scored: Vec<(f64, String)> = Vec::new();
 
+        let input_lower = input.to_lowercase();
+        let short_input = input.len() <= 3;
+        let min_score: u32 = if short_input { 80 } else { 40 };
+
         for (command, cmd_cwd, timestamp, count) in &rows {
+            if short_input && !command.to_lowercase().starts_with(&input_lower) {
+                continue;
+            }
             let mut buf = Vec::new();
             let haystack = nucleo_matcher::Utf32Str::new(command, &mut buf);
             if let Some(match_score) = pattern.score(haystack, &mut matcher) {
+                if match_score < min_score {
+                    continue;
+                }
                 let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
                 let recency_decay = 1.0 / age_hours.ln().max(1.0);
                 let frequency_boost = (*count as f64).ln().max(1.0);
                 let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
+                let prefix_bonus = if command.starts_with(input) { 2.0 } else { 1.0 };
 
-                let score = match_score as f64 * recency_decay * frequency_boost * dir_affinity;
+                let score =
+                    match_score as f64 * recency_decay * frequency_boost * dir_affinity * prefix_bonus;
                 scored.push((score, command.clone()));
             }
         }

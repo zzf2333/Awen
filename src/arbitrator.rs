@@ -18,6 +18,7 @@ impl Arbitrator {
                 .partial_cmp(&a.confidence)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+        suggestions.retain(|s| s.confidence >= 0.1);
         suggestions.truncate(8);
 
         SuggestResponse {
