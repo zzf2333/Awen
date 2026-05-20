@@ -1,4 +1,3 @@
-use crate::arbitrator::Arbitrator;
 use crate::config::{self, AwenConfig};
 use crate::context::ContextEngine;
 use crate::layer::ai;
@@ -6,6 +5,7 @@ use crate::layer::failure::FailureLayer;
 use crate::layer::history::HistoryLayer;
 use crate::layer::risk::RiskLayer;
 use crate::layer::specs::SpecsLayer;
+use crate::pipeline::{AiParams, AiTriggerPolicy, LocalResult, SuggestionPipeline};
 use crate::protocol::*;
 
 use std::sync::Arc;
@@ -23,63 +23,6 @@ struct DaemonState {
     config: AwenConfig,
     start_time: std::time::Instant,
     last_ai_request_at: Option<std::time::Instant>,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn ai_is_useful(
-    input: &str,
-    has_warning: bool,
-    local_candidate_count: usize,
-    max_local_confidence: f64,
-    has_failure_context: bool,
-    local_failure_matched: bool,
-    min_local_candidates: usize,
-    min_local_confidence: f64,
-) -> bool {
-    if has_warning {
-        return false;
-    }
-    if has_failure_context && !local_failure_matched {
-        return true;
-    }
-    if input.len() < 2 {
-        return false;
-    }
-    local_candidate_count < min_local_candidates && max_local_confidence < min_local_confidence
-}
-
-#[allow(clippy::too_many_arguments)]
-fn should_request_ai(
-    input: &str,
-    has_warning: bool,
-    local_candidate_count: usize,
-    max_local_confidence: f64,
-    has_failure_context: bool,
-    local_failure_matched: bool,
-    last_ai_request_at: Option<std::time::Instant>,
-    debounce_ms: u64,
-    min_local_candidates: usize,
-    min_local_confidence: f64,
-) -> bool {
-    if !ai_is_useful(
-        input,
-        has_warning,
-        local_candidate_count,
-        max_local_confidence,
-        has_failure_context,
-        local_failure_matched,
-        min_local_candidates,
-        min_local_confidence,
-    ) {
-        return false;
-    }
-    if let Some(last_at) = last_ai_request_at {
-        let elapsed = last_at.elapsed().as_millis() as u64;
-        if elapsed < debounce_ms {
-            return false;
-        }
-    }
-    true
 }
 
 pub async fn run(config: AwenConfig) {
@@ -277,43 +220,21 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    // Backward compatibility: old plugin sends nl_mode=true via Suggest
-    if req.nl_mode {
-        let nl_req = NlGenerateRequest {
-            query: req
-                .input
-                .strip_prefix('#')
-                .unwrap_or(&req.input)
-                .trim()
-                .to_string(),
-            context: req.context,
-            timestamp: req.timestamp,
-        };
-        return handle_nl_generate(nl_req, state).await;
-    }
+    let (local, ai_params, policy, last_ai_at) = {
+        let mut st = state.lock().await;
 
-    if req.input.is_empty() {
-        let (
-            suggestions,
-            hint,
-            local_failure_matched,
-            has_failure_context,
-            ai_provider,
-            max_tokens,
-            timeout_ms,
-            stderr_max_chars,
-            debounce_ms,
-            last_ai_request_at,
-        ) = {
-            let state = state.lock().await;
-            let mut suggestions = state.history.suggest_next(&req.context.cwd, 5);
+        let (response, local_failure_matched, has_failure_context, has_warning) = if req
+            .input
+            .is_empty()
+        {
+            let mut suggestions = st.history.suggest_next(&req.context.cwd, 5);
 
             let mut hint = None;
             let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
                 && exit_code != 0
                 && let Some(stderr) = &req.context.last_stderr
                 && let Some((fail_suggestion, fail_hint)) =
-                    state.failure.match_failure(stderr, exit_code)
+                    st.failure.match_failure(stderr, exit_code)
             {
                 suggestions.insert(0, fail_suggestion);
                 hint = Some(fail_hint);
@@ -325,261 +246,90 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             let has_failure_context = req.context.last_exit_code.is_some_and(|c| c != 0)
                 && req.context.last_stderr.is_some();
 
-            (
+            let response = SuggestResponse {
                 suggestions,
                 hint,
+                warning: None,
+                need_ai: false,
+            };
+            (response, local_failure_matched, has_failure_context, false)
+        } else {
+            st.context.update_cwd(req.context.cwd.clone());
+
+            let mut suggestions = Vec::new();
+            suggestions.extend(st.history.suggest(&req.input, &req.context.cwd, 5));
+            suggestions.extend(st.specs.suggest(&req.input, req.cursor_pos));
+
+            let mut hint = None;
+            let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
+                && exit_code != 0
+                && let Some(stderr) = &req.context.last_stderr
+                && let Some((fail_suggestion, fail_hint)) =
+                    st.failure.match_failure(stderr, exit_code)
+            {
+                suggestions.push(fail_suggestion);
+                hint = Some(fail_hint);
+                true
+            } else {
+                false
+            };
+
+            let has_failure_context = req.context.last_exit_code.is_some_and(|c| c != 0)
+                && req.context.last_stderr.is_some();
+
+            let warning = if st.config.ui.risk_detection {
+                st.risk.check(&req.input)
+            } else {
+                None
+            };
+            let has_warning = warning.is_some();
+
+            let response =
+                crate::arbitrator::Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
+            (
+                response,
                 local_failure_matched,
                 has_failure_context,
-                state.ai_provider.clone(),
-                state.config.ai.max_tokens,
-                state.config.ai.timeout_ms,
-                state.config.context.stderr_max_chars,
-                state.config.ai.debounce_ms,
-                state.last_ai_request_at,
+                has_warning,
             )
         };
 
-        let need_ai = has_failure_context && !local_failure_matched && ai_provider.is_some();
-
-        let mut response = SuggestResponse {
-            suggestions,
-            hint,
-            warning: None,
-            need_ai,
-        };
-
-        if !req.skip_ai
-            && need_ai
-            && let Some(provider) = ai_provider
-        {
-            let debounce_ok = last_ai_request_at
-                .map(|t| t.elapsed().as_millis() as u64 >= debounce_ms)
-                .unwrap_or(true);
-            if debounce_ok {
-                {
-                    let mut st = state.lock().await;
-                    st.last_ai_request_at = Some(std::time::Instant::now());
-                }
-                let mut ctx = req.context.clone();
-                crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
-                let prompt = ai::build_error_recovery_prompt(&ctx);
-                tracing::info!("AI error recovery started");
-
-                let ai_start = std::time::Instant::now();
-                match tokio::time::timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    provider.complete_nl(&prompt, max_tokens),
-                )
-                .await
-                {
-                    Ok(Ok(ai_response)) => {
-                        tracing::info!(
-                            "AI error recovery received, latency_ms={}",
-                            ai_start.elapsed().as_millis()
-                        );
-                        if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
-                            Arbitrator::merge_ai_suggestion(&mut response, suggestion);
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        tracing::info!("AI error recovery error: {e}");
-                    }
-                    Err(_) => {
-                        tracing::info!(
-                            "AI error recovery timed out, latency_ms={}",
-                            ai_start.elapsed().as_millis()
-                        );
-                    }
-                }
-            }
-        }
-
-        return Response::Suggest(response);
-    }
-
-    let (
-        mut response,
-        local_failure_matched,
-        has_failure_context,
-        ai_provider,
-        max_tokens,
-        timeout_ms,
-        stderr_max_chars,
-        has_warning,
-        debounce_ms,
-        last_ai_request_at,
-        min_local_candidates,
-        min_local_confidence,
-    ) = {
-        let mut state = state.lock().await;
-        state.context.update_cwd(req.context.cwd.clone());
-
-        let mut suggestions = Vec::new();
-
-        let history_results = state.history.suggest(&req.input, &req.context.cwd, 5);
-        suggestions.extend(history_results);
-
-        let specs_results = state.specs.suggest(&req.input, req.cursor_pos);
-        suggestions.extend(specs_results);
-
-        let mut hint = None;
-        let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
-            && exit_code != 0
-            && let Some(stderr) = &req.context.last_stderr
-            && let Some((fail_suggestion, fail_hint)) =
-                state.failure.match_failure(stderr, exit_code)
-        {
-            suggestions.push(fail_suggestion);
-            hint = Some(fail_hint);
-            true
-        } else {
-            false
-        };
-
-        let has_failure_context =
-            req.context.last_exit_code.is_some_and(|c| c != 0) && req.context.last_stderr.is_some();
-
-        let warning = if state.config.ui.risk_detection {
-            state.risk.check(&req.input)
-        } else {
-            None
-        };
-
-        let has_warning = warning.is_some();
-        let response = Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
-        let ai_provider = state.ai_provider.clone();
-        let max_tokens = state.config.ai.max_tokens;
-        let timeout_ms = state.config.ai.timeout_ms;
-        let stderr_max_chars = state.config.context.stderr_max_chars;
-        let debounce_ms = state.config.ai.debounce_ms;
-        let last_ai_request_at = state.last_ai_request_at;
-        let min_local_candidates = state.config.ai.min_local_candidates;
-        let min_local_confidence = state.config.ai.min_local_confidence;
-
-        (
+        let local = LocalResult {
             response,
-            local_failure_matched,
             has_failure_context,
-            ai_provider,
-            max_tokens,
-            timeout_ms,
-            stderr_max_chars,
+            local_failure_matched,
             has_warning,
-            debounce_ms,
-            last_ai_request_at,
-            min_local_candidates,
-            min_local_confidence,
-        )
+        };
+
+        let ai_params = st.ai_provider.clone().map(|provider| AiParams {
+            provider,
+            max_tokens: st.config.ai.max_tokens,
+            timeout_ms: st.config.ai.timeout_ms,
+            stderr_max_chars: st.config.context.stderr_max_chars,
+        });
+
+        let policy = AiTriggerPolicy::new(&st.config.ai);
+        let last_ai_at = st.last_ai_request_at;
+
+        (local, ai_params, policy, last_ai_at)
     };
 
-    let local_candidate_count = response.suggestions.len();
-    let max_local_confidence = response
-        .suggestions
-        .iter()
-        .map(|s| s.confidence)
-        .fold(0.0_f64, f64::max);
-
-    let ai_useful = ai_is_useful(
+    let result = SuggestionPipeline::suggest(
+        local,
+        ai_params,
+        &policy,
         &req.input,
-        has_warning,
-        local_candidate_count,
-        max_local_confidence,
-        has_failure_context,
-        local_failure_matched,
-        min_local_candidates,
-        min_local_confidence,
-    );
+        &req.context,
+        req.skip_ai,
+        last_ai_at,
+    )
+    .await;
 
-    response.need_ai = ai_useful && ai_provider.is_some();
-
-    if !req.skip_ai
-        && let Some(provider) = ai_provider
-        && should_request_ai(
-            &req.input,
-            has_warning,
-            local_candidate_count,
-            max_local_confidence,
-            has_failure_context,
-            local_failure_matched,
-            last_ai_request_at,
-            debounce_ms,
-            min_local_candidates,
-            min_local_confidence,
-        )
-    {
-        {
-            let mut state = state.lock().await;
-            state.last_ai_request_at = Some(std::time::Instant::now());
-        }
-
-        let mut ctx = req.context.clone();
-        crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
-
-        let is_recovery = has_failure_context && !local_failure_matched;
-        if is_recovery {
-            let prompt = ai::build_error_recovery_prompt(&ctx);
-            tracing::info!("AI error recovery started, input_len={}", req.input.len());
-
-            let ai_start = std::time::Instant::now();
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(timeout_ms),
-                provider.complete_nl(&prompt, max_tokens),
-            )
-            .await
-            {
-                Ok(Ok(ai_response)) => {
-                    tracing::info!(
-                        "AI error recovery received, latency_ms={}",
-                        ai_start.elapsed().as_millis()
-                    );
-                    if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
-                        Arbitrator::merge_ai_suggestion(&mut response, suggestion);
-                    }
-                }
-                Ok(Err(e)) => tracing::info!("AI error recovery error: {e}"),
-                Err(_) => tracing::info!(
-                    "AI error recovery timed out, latency_ms={}",
-                    ai_start.elapsed().as_millis()
-                ),
-            }
-        } else {
-            let prompt = ai::build_prompt(&req.input, &ctx);
-            tracing::info!("AI completion started, input_len={}", req.input.len());
-
-            let ai_start = std::time::Instant::now();
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(timeout_ms),
-                provider.complete(&prompt, max_tokens),
-            )
-            .await
-            {
-                Ok(Ok(ai_response)) => {
-                    tracing::info!(
-                        "AI completion received, latency_ms={}, response_len={}",
-                        ai_start.elapsed().as_millis(),
-                        ai_response.len()
-                    );
-                    if let Some(suggestion) = ai::parse_ai_suggestion(&req.input, &ai_response) {
-                        tracing::info!("AI suggestion accepted, len={}", suggestion.text.len());
-                        Arbitrator::merge_ai_suggestion(&mut response, suggestion);
-                    } else {
-                        tracing::info!("AI suggestion rejected by parser");
-                    }
-                }
-                Ok(Err(e)) => {
-                    tracing::info!("AI completion error: {e}");
-                }
-                Err(_) => {
-                    tracing::info!(
-                        "AI completion timed out, latency_ms={}",
-                        ai_start.elapsed().as_millis()
-                    );
-                }
-            }
-        }
+    if let Some(at) = result.ai_requested_at {
+        state.lock().await.last_ai_request_at = Some(at);
     }
 
-    Response::Suggest(response)
+    Response::Suggest(result.response)
 }
 
 async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
@@ -768,166 +518,4 @@ pub async fn send_request_to(
 
     let response: Response = serde_json::from_str(line.trim())?;
     Ok(response)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ai_is_useful tests
-
-    #[test]
-    fn test_ai_is_useful_warning_blocks() {
-        assert!(!ai_is_useful("git ch", true, 0, 0.0, false, false, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_error_recovery() {
-        assert!(ai_is_useful("", false, 0, 0.0, true, false, 2, 0.6));
-        assert!(ai_is_useful("gi", false, 0, 0.0, true, false, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_error_recovery_local_matched() {
-        assert!(!ai_is_useful("", false, 1, 0.95, true, true, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_short_input_no_failure() {
-        assert!(!ai_is_useful("g", false, 0, 0.0, false, false, 2, 0.6));
-        assert!(!ai_is_useful("", false, 0, 0.0, false, false, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_sufficient_count() {
-        assert!(!ai_is_useful("git ch", false, 3, 0.3, false, false, 2, 0.6));
-        assert!(!ai_is_useful("git ch", false, 2, 0.1, false, false, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_sufficient_confidence() {
-        assert!(!ai_is_useful("git ch", false, 1, 0.8, false, false, 2, 0.6));
-        assert!(!ai_is_useful("git ch", false, 0, 0.6, false, false, 2, 0.6));
-    }
-
-    #[test]
-    fn test_ai_is_useful_both_insufficient() {
-        assert!(ai_is_useful("myapp d", false, 1, 0.3, false, false, 2, 0.6));
-        assert!(ai_is_useful("myapp d", false, 0, 0.0, false, false, 2, 0.6));
-        assert!(ai_is_useful(
-            "myapp d", false, 1, 0.59, false, false, 2, 0.6
-        ));
-    }
-
-    // should_request_ai tests
-
-    #[test]
-    fn test_should_request_ai_short_input() {
-        assert!(!should_request_ai(
-            "g", false, 0, 0.0, false, false, None, 300, 2, 0.6
-        ));
-        assert!(should_request_ai(
-            "rm", false, 0, 0.0, false, false, None, 300, 2, 0.6
-        ));
-        assert!(should_request_ai(
-            "gi", false, 0, 0.0, false, false, None, 300, 2, 0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_warning_present() {
-        assert!(!should_request_ai(
-            "rm -rf /", true, 0, 0.0, false, false, None, 300, 2, 0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_sufficient_local() {
-        assert!(!should_request_ai(
-            "git checkout",
-            false,
-            3,
-            0.95,
-            false,
-            false,
-            None,
-            300,
-            2,
-            0.6
-        ));
-        assert!(!should_request_ai(
-            "git checkout",
-            false,
-            2,
-            0.7,
-            false,
-            false,
-            None,
-            300,
-            2,
-            0.6
-        ));
-        assert!(!should_request_ai(
-            "git checkout",
-            false,
-            1,
-            0.9,
-            false,
-            false,
-            None,
-            300,
-            2,
-            0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_debounce() {
-        let recent = std::time::Instant::now();
-        assert!(!should_request_ai(
-            "docker run",
-            false,
-            0,
-            0.0,
-            false,
-            false,
-            Some(recent),
-            300,
-            2,
-            0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_happy_path() {
-        assert!(should_request_ai(
-            "docker run",
-            false,
-            0,
-            0.5,
-            false,
-            false,
-            None,
-            300,
-            2,
-            0.6
-        ));
-        assert!(should_request_ai(
-            "myapp", false, 1, 0.3, false, false, None, 300, 2, 0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_sufficient_confidence_skips() {
-        assert!(!should_request_ai(
-            "git ch", false, 1, 0.9, false, false, None, 300, 2, 0.6
-        ));
-    }
-
-    #[test]
-    fn test_should_request_ai_error_recovery_bypasses_input_check() {
-        assert!(should_request_ai(
-            "", false, 0, 0.0, true, false, None, 300, 2, 0.6
-        ));
-    }
 }
