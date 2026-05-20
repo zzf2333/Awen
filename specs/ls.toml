@@ -1,0 +1,50 @@
+[command]
+name = "ls"
+description = "List directory contents"
+
+[[command.flags]]
+name = "--long"
+short = "-l"
+description = "Long format"
+
+[[command.flags]]
+name = "--all"
+short = "-a"
+description = "Include hidden files"
+
+[[command.flags]]
+name = "--human-readable"
+short = "-h"
+description = "Human-readable sizes"
+
+[[command.flags]]
+name = "--recursive"
+short = "-R"
+description = "List subdirectories recursively"
+
+[[command.flags]]
+name = "-t"
+description = "Sort by modification time"
+
+[[command.flags]]
+name = "-S"
+description = "Sort by file size"
+
+[[command.flags]]
+name = "--reverse"
+short = "-r"
+description = "Reverse sort order"
+
+[[command.flags]]
+name = "--color"
+arg = "WHEN"
+description = "Colorize output"
+
+[[command.flags]]
+name = "-1"
+description = "One entry per line"
+
+[[command.flags]]
+name = "--directory"
+short = "-d"
+description = "List directories themselves"

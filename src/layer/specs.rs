@@ -59,14 +59,17 @@ impl SpecsLayer {
     }
 
     pub fn load_builtin_specs(&mut self) {
-        let builtin = [
-            ("git", include_str!("../../specs/git.toml")),
-            ("docker", include_str!("../../specs/docker.toml")),
-            ("npm", include_str!("../../specs/npm.toml")),
-            ("cargo", include_str!("../../specs/cargo.toml")),
-            ("brew", include_str!("../../specs/brew.toml")),
-            ("curl", include_str!("../../specs/curl.toml")),
-            ("ssh", include_str!("../../specs/ssh.toml")),
+        macro_rules! builtin_specs {
+            ($($name:literal),* $(,)?) => {
+                [$(($name, include_str!(concat!("../../specs/", $name, ".toml")))),*]
+            };
+        }
+
+        let builtin = builtin_specs![
+            // VCS & dev ecosystem
+            "git", "docker", "npm", "cargo", "brew", "curl", "ssh",
+            // Linux core - file operations
+            "ls", "rm", "cp", "mv", "mkdir", "touch", "ln", "chmod", "chown",
         ];
 
         for (name, content) in builtin {

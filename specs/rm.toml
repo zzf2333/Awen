@@ -1,0 +1,28 @@
+[command]
+name = "rm"
+description = "Remove files or directories"
+
+[[command.flags]]
+name = "--recursive"
+short = "-r"
+description = "Remove directories recursively"
+
+[[command.flags]]
+name = "--force"
+short = "-f"
+description = "Force removal without prompt"
+
+[[command.flags]]
+name = "--interactive"
+short = "-i"
+description = "Prompt before each removal"
+
+[[command.flags]]
+name = "--verbose"
+short = "-v"
+description = "Explain what is being done"
+
+[[command.flags]]
+name = "--dir"
+short = "-d"
+description = "Remove empty directories"

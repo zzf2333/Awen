@@ -1,0 +1,19 @@
+[command]
+name = "mkdir"
+description = "Create directories"
+
+[[command.flags]]
+name = "--parents"
+short = "-p"
+description = "Create parent directories"
+
+[[command.flags]]
+name = "--verbose"
+short = "-v"
+description = "Print each created directory"
+
+[[command.flags]]
+name = "--mode"
+short = "-m"
+arg = "MODE"
+description = "Set permission mode"
