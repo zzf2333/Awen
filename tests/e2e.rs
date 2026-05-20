@@ -971,8 +971,8 @@ async fn test_ai_suggestion_merged_into_response() {
     let daemon = TestDaemon::start_with_ai(config, provider).await;
 
     let req = Request::Suggest(SuggestRequest {
-        input: "kubectl get".into(),
-        cursor_pos: 11,
+        input: "myapp deploy".into(),
+        cursor_pos: 12,
         context: RequestContext {
             cwd: "/home/user/project".into(),
             last_command: None,
@@ -1045,7 +1045,7 @@ async fn test_ai_debounce_skips_second_request() {
         })
     };
 
-    let resp1 = daemon.send(&make_req("kubectl get")).await;
+    let resp1 = daemon.send(&make_req("myapp deploy")).await;
     match &resp1 {
         Response::Suggest(s) => {
             assert!(
@@ -1063,7 +1063,7 @@ async fn test_ai_debounce_skips_second_request() {
         "AI should be called once for first request"
     );
 
-    let resp2 = daemon.send(&make_req("kubectl apply")).await;
+    let resp2 = daemon.send(&make_req("myapp rollback")).await;
     match &resp2 {
         Response::Suggest(s) => {
             assert!(
@@ -1101,8 +1101,8 @@ async fn test_skip_ai_returns_local_only() {
     let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
 
     let req = Request::Suggest(SuggestRequest {
-        input: "kubectl get".into(),
-        cursor_pos: 11,
+        input: "myapp deploy".into(),
+        cursor_pos: 12,
         context: RequestContext {
             cwd: "/home/user/project".into(),
             last_command: None,
@@ -1207,8 +1207,8 @@ async fn test_skip_ai_false_still_calls_ai() {
     let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
 
     let req = Request::Suggest(SuggestRequest {
-        input: "kubectl get".into(),
-        cursor_pos: 11,
+        input: "myapp deploy".into(),
+        cursor_pos: 12,
         context: RequestContext {
             cwd: "/home/user/project".into(),
             last_command: None,

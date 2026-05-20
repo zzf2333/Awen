@@ -602,7 +602,7 @@ _awen_cancel_pending_ai() {
 _awen_schedule_ai() {
     _awen_cancel_pending_ai
 
-    [[ ${#BUFFER} -lt 3 ]] && return
+    [[ ${#BUFFER} -lt 2 ]] && return
     [[ ! -S "$_AWEN_SOCKET" ]] && return
     command -v socat &>/dev/null || return
 

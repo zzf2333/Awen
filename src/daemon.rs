@@ -32,7 +32,7 @@ fn should_request_ai(
     last_ai_request_at: Option<std::time::Instant>,
     debounce_ms: u64,
 ) -> bool {
-    if input.len() < 3 {
+    if input.len() < 2 {
         return false;
     }
     if has_warning {
@@ -564,8 +564,9 @@ mod tests {
 
     #[test]
     fn test_should_request_ai_short_input() {
-        assert!(!should_request_ai("gi", false, 0.0, None, 300));
-        assert!(!should_request_ai("ab", false, 0.0, None, 300));
+        assert!(!should_request_ai("g", false, 0.0, None, 300));
+        assert!(should_request_ai("rm", false, 0.0, None, 300));
+        assert!(should_request_ai("gi", false, 0.0, None, 300));
     }
 
     #[test]

@@ -97,10 +97,19 @@ impl HistoryLayer {
         let input_lower = input.to_lowercase();
         let short_input = input.len() <= 3;
         let min_score: u32 = if short_input { 80 } else { 40 };
+        let input_first_word = input_lower.split_whitespace().next().unwrap_or("");
+        let has_space = input.contains(' ');
 
         for (command, cmd_cwd, timestamp, count) in &rows {
             if short_input && !command.to_lowercase().starts_with(&input_lower) {
                 continue;
+            }
+            if has_space {
+                let cmd_first_word = command.to_lowercase();
+                let cmd_first = cmd_first_word.split_whitespace().next().unwrap_or("");
+                if cmd_first != input_first_word {
+                    continue;
+                }
             }
             let mut buf = Vec::new();
             let haystack = nucleo_matcher::Utf32Str::new(command, &mut buf);
@@ -112,7 +121,7 @@ impl HistoryLayer {
                 let recency_decay = 1.0 / age_hours.ln().max(1.0);
                 let frequency_boost = (*count as f64).ln().max(1.0);
                 let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
-                let prefix_bonus = if command.starts_with(input) { 2.0 } else { 1.0 };
+                let prefix_bonus = if command.starts_with(input) { 3.0 } else { 1.0 };
 
                 let score = match_score as f64
                     * recency_decay
@@ -338,5 +347,27 @@ mod tests {
         let (_dir, layer) = setup();
         let results = layer.suggest_next("/tmp", 5);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_suggest_first_word_filter() {
+        let (_dir, layer) = setup();
+        layer.record("git add .", "/app", 0).unwrap();
+        layer.record("git commit -m 'test'", "/app", 0).unwrap();
+        layer
+            .record("pkill -f daemon; sleep 1; source init", "/app", 0)
+            .unwrap();
+        layer
+            .record("echo git add something", "/app", 0)
+            .unwrap();
+
+        let results = layer.suggest("git a", "/app", 10);
+        for s in &results {
+            assert!(
+                s.text.starts_with("git"),
+                "expected git prefix, got: {}",
+                s.text
+            );
+        }
     }
 }
