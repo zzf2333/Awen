@@ -1,0 +1,51 @@
+[command]
+name = "sort"
+description = "Sort lines of text files"
+
+[[command.flags]]
+name = "--reverse"
+short = "-r"
+description = "Reverse sort order"
+
+[[command.flags]]
+name = "--numeric-sort"
+short = "-n"
+description = "Sort by numeric value"
+
+[[command.flags]]
+name = "--key"
+short = "-k"
+arg = "KEY"
+description = "Sort by key field"
+
+[[command.flags]]
+name = "--field-separator"
+short = "-t"
+arg = "SEP"
+description = "Set field separator"
+
+[[command.flags]]
+name = "--unique"
+short = "-u"
+description = "Output only unique lines"
+
+[[command.flags]]
+name = "--human-numeric-sort"
+short = "-h"
+description = "Sort human-readable numbers"
+
+[[command.flags]]
+name = "--ignore-case"
+short = "-f"
+description = "Fold lower to upper case"
+
+[[command.flags]]
+name = "--output"
+short = "-o"
+arg = "FILE"
+description = "Write result to file"
+
+[[command.flags]]
+name = "--stable"
+short = "-s"
+description = "Stabilize sort by disabling last-resort comparison"

@@ -1,0 +1,29 @@
+[command]
+name = "sed"
+description = "Stream editor for text"
+
+[[command.flags]]
+name = "--in-place"
+short = "-i"
+arg = "SUFFIX"
+description = "Edit files in place"
+
+[[command.flags]]
+name = "-n"
+description = "Suppress automatic printing"
+
+[[command.flags]]
+name = "--expression"
+short = "-e"
+arg = "SCRIPT"
+description = "Add editing command"
+
+[[command.flags]]
+name = "-E"
+description = "Use extended regex"
+
+[[command.flags]]
+name = "--file"
+short = "-f"
+arg = "FILE"
+description = "Read commands from file"

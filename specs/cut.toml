@@ -1,0 +1,30 @@
+[command]
+name = "cut"
+description = "Remove sections from lines"
+
+[[command.flags]]
+name = "--delimiter"
+short = "-d"
+arg = "DELIM"
+description = "Set field delimiter"
+
+[[command.flags]]
+name = "--fields"
+short = "-f"
+arg = "FIELDS"
+description = "Select fields by number"
+
+[[command.flags]]
+name = "--characters"
+short = "-c"
+arg = "CHARS"
+description = "Select characters by position"
+
+[[command.flags]]
+name = "--complement"
+description = "Complement the selection"
+
+[[command.flags]]
+name = "--only-delimited"
+short = "-s"
+description = "Skip lines without delimiter"

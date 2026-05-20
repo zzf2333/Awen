@@ -70,6 +70,11 @@ impl SpecsLayer {
             "git", "docker", "npm", "cargo", "brew", "curl", "ssh",
             // Linux core - file operations
             "ls", "rm", "cp", "mv", "mkdir", "touch", "ln", "chmod", "chown",
+            // Linux text processing & utilities
+            "cat", "head", "tail", "grep", "sed", "awk", "sort", "uniq",
+            "wc", "diff", "cut", "tr", "tee", "xargs",
+            // Linux core - search, archive, process, disk
+            "find", "tar", "ps", "kill", "df", "du", "lsof",
         ];
 
         for (name, content) in builtin {
