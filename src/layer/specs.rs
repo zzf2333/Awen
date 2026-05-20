@@ -67,30 +67,79 @@ impl SpecsLayer {
 
         let builtin = builtin_specs![
             // VCS & dev ecosystem
-            "git", "docker", "npm", "cargo", "brew", "curl", "ssh",
+            "git",
+            "docker",
+            "npm",
+            "cargo",
+            "brew",
+            "curl",
+            "ssh",
             // Cloud & infrastructure
-            "gh", "kubectl", "terraform",
+            "gh",
+            "kubectl",
+            "terraform",
             // Languages & runtimes
-            "python", "go", "node",
+            "python",
+            "go",
+            "node",
             // Package managers & build tools
-            "pip", "cmake", "make",
+            "pip",
+            "cmake",
+            "make",
             // AI tools
             "claude",
             // Linux core - file operations
-            "ls", "rm", "cp", "mv", "mkdir", "touch", "ln", "chmod", "chown",
+            "ls",
+            "rm",
+            "cp",
+            "mv",
+            "mkdir",
+            "touch",
+            "ln",
+            "chmod",
+            "chown",
             // Linux text processing & utilities
-            "cat", "head", "tail", "grep", "sed", "awk", "sort", "uniq",
-            "wc", "diff", "cut", "tr", "tee", "xargs",
+            "cat",
+            "head",
+            "tail",
+            "grep",
+            "sed",
+            "awk",
+            "sort",
+            "uniq",
+            "wc",
+            "diff",
+            "cut",
+            "tr",
+            "tee",
+            "xargs",
             // Linux core - search, archive, process, disk
-            "find", "tar", "ps", "kill", "df", "du", "lsof",
+            "find",
+            "tar",
+            "ps",
+            "kill",
+            "df",
+            "du",
+            "lsof",
             // Networking & diagnostics
-            "ping", "dig", "wget", "ss", "nmap",
+            "ping",
+            "dig",
+            "wget",
+            "ss",
+            "nmap",
             // System administration
-            "systemctl", "journalctl", "htop",
+            "systemctl",
+            "journalctl",
+            "htop",
             // Terminal multiplexers
-            "tmux", "screen",
+            "tmux",
+            "screen",
             // Database CLIs
-            "psql", "mysql", "redis-cli", "mongosh", "sqlite3",
+            "psql",
+            "mysql",
+            "redis-cli",
+            "mongosh",
+            "sqlite3",
         ];
 
         for (name, content) in builtin {

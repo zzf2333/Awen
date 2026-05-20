@@ -89,6 +89,8 @@ pub struct SuggestResponse {
     pub hint: Option<Hint>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<Warning>,
+    #[serde(default)]
+    pub need_ai: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -234,6 +236,7 @@ mod tests {
             warning: Some(Warning {
                 text: "This will delete everything".into(),
             }),
+            need_ai: false,
         });
         let json = serde_json::to_string(&resp).unwrap();
         let parsed: Response = serde_json::from_str(&json).unwrap();

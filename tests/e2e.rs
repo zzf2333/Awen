@@ -891,6 +891,7 @@ async fn test_ai_timeout_returns_local_suggestions() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
     config.ai.debounce_ms = 0;
+    config.ai.timeout_ms = 500;
     config.context.repo_detect = false;
     config.context.git_context = false;
 
@@ -1371,6 +1372,304 @@ async fn test_skip_ai_false_high_confidence_local_skips_ai() {
 }
 
 // ============================================================
+// AI-as-fallback E2E tests
+// ============================================================
+
+#[tokio::test]
+async fn test_ai_not_called_when_local_sufficient() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    for _ in 0..5 {
+        daemon
+            .send(&Request::Record(RecordCommandRequest {
+                command: "git commit -m 'fix'".into(),
+                exit_code: 0,
+                stderr: None,
+                cwd: "/tmp".into(),
+                duration_ms: None,
+            }))
+            .await;
+    }
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "git co".into(),
+        cursor_pos: 6,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+        nl_mode: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                !s.suggestions.is_empty(),
+                "should have local suggestions for 'git co'"
+            );
+            assert!(
+                s.suggestions
+                    .iter()
+                    .all(|sg| sg.source != SuggestionSource::Ai),
+                "AI should not be called when local has sufficient results"
+            );
+            assert_eq!(
+                provider.calls(),
+                0,
+                "AI provider should not be called when local candidates are sufficient"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_ai_called_when_local_insufficient() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "myapp deploy --region".into(),
+        cursor_pos: 21,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+        nl_mode: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                provider.calls() > 0,
+                "AI should be called when local candidates are insufficient"
+            );
+            let has_ai = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Ai);
+            assert!(has_ai, "response should contain AI suggestion");
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_ai_error_recovery_when_failure_unmatched() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "".into(),
+        cursor_pos: 0,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: Some("myapp migrate".into()),
+            last_exit_code: Some(1),
+            last_stderr: Some("database connection timeout after 30s".into()),
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+        nl_mode: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                provider.calls() > 0,
+                "AI should be called for error recovery when local patterns miss"
+            );
+            let has_ai = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Ai);
+            assert!(
+                has_ai,
+                "should have AI recovery suggestion for unmatched error"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_ai_not_called_when_local_failure_pattern_matches() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "".into(),
+        cursor_pos: 0,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: Some("ripgrep".into()),
+            last_exit_code: Some(127),
+            last_stderr: Some("zsh: command not found: ripgrep".into()),
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: false,
+        nl_mode: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            let has_failure = s
+                .suggestions
+                .iter()
+                .any(|sg| sg.source == SuggestionSource::Failure);
+            assert!(has_failure, "should have local failure recovery suggestion");
+            assert_eq!(
+                provider.calls(),
+                0,
+                "AI should not be called when local failure pattern matches"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_need_ai_signal_in_phase1_response() {
+    let mut config = AwenConfig::default();
+    config.ai.enabled = true;
+    config.ai.debounce_ms = 0;
+    config.context.repo_detect = false;
+    config.context.git_context = false;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let provider_clone: Arc<dyn AiProvider> = provider.clone();
+    let daemon = TestDaemon::start_with_ai(config, provider_clone).await;
+
+    // Unknown command: local insufficient → need_ai should be true
+    let req = Request::Suggest(SuggestRequest {
+        input: "myapp deploy".into(),
+        cursor_pos: 12,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: true,
+        nl_mode: false,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(
+                s.need_ai,
+                "need_ai should be true when local candidates are insufficient"
+            );
+            assert_eq!(provider.calls(), 0, "skip_ai=true should not call AI");
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    // Known command with specs: local sufficient → need_ai should be false
+    let req2 = Request::Suggest(SuggestRequest {
+        input: "git ".into(),
+        cursor_pos: 4,
+        context: RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: true,
+        nl_mode: false,
+    });
+
+    let resp2 = daemon.send(&req2).await;
+    match resp2 {
+        Response::Suggest(s) => {
+            assert!(
+                !s.need_ai,
+                "need_ai should be false when local candidates are sufficient"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+// ============================================================
 // NL Generate protocol tests
 // ============================================================
 
@@ -1397,7 +1696,10 @@ async fn test_nl_generate_no_ai_returns_none() {
 
     match resp {
         Response::NlGenerate(r) => {
-            assert!(r.command.is_none(), "no AI provider, command should be None");
+            assert!(
+                r.command.is_none(),
+                "no AI provider, command should be None"
+            );
             assert!(r.warning.is_none());
         }
         other => panic!("expected NlGenerate response, got: {other:?}"),
@@ -1505,9 +1807,7 @@ async fn test_legacy_suggest_with_nl_mode_compat() {
                 "no AI provider, compat path should return NlGenerate with None"
             );
         }
-        other => panic!(
-            "expected NlGenerate response from legacy compat path, got: {other:?}"
-        ),
+        other => panic!("expected NlGenerate response from legacy compat path, got: {other:?}"),
     }
 
     daemon.shutdown().await;

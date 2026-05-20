@@ -19,6 +19,8 @@ pub struct AiConfig {
     pub timeout_ms: u64,
     pub max_tokens: u32,
     pub cache_ttl_minutes: u32,
+    pub min_local_candidates: usize,
+    pub min_local_confidence: f64,
     pub deepseek: DeepSeekConfig,
     pub ollama: OllamaConfig,
 }
@@ -67,6 +69,8 @@ impl Default for AiConfig {
             timeout_ms: 30000,
             max_tokens: 1024,
             cache_ttl_minutes: 30,
+            min_local_candidates: 2,
+            min_local_confidence: 0.6,
             deepseek: DeepSeekConfig::default(),
             ollama: OllamaConfig::default(),
         }
@@ -203,6 +207,8 @@ mod tests {
         assert!(config.ai.enabled);
         assert_eq!(config.ai.provider, "deepseek");
         assert_eq!(config.ai.debounce_ms, 300);
+        assert_eq!(config.ai.min_local_candidates, 2);
+        assert!((config.ai.min_local_confidence - 0.6).abs() < f64::EPSILON);
         assert_eq!(config.context.session_history_size, 20);
         assert!(!config.context.capture_stderr);
         assert_eq!(config.ui.ghost_text_color, 242);

@@ -17,6 +17,7 @@ typeset -g _AWEN_AI_SNAPSHOT=""
 typeset -g _AWEN_AI_PENDING=""
 typeset -g _AWEN_AI_SEQ=0
 typeset -g _AWEN_AI_ACTIVE_SEQ=0
+typeset -g _AWEN_NEED_AI=""
 typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
 typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
 typeset -g _AWEN_LAST_LOCAL_MS=0
@@ -479,6 +480,17 @@ _awen_apply_response() {
     _AWEN_WARNING="$warning_text"
     _AWEN_HINT="$hint_text"
 
+    # Parse need_ai signal from daemon
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        _AWEN_NEED_AI=$(printf '%s\n' "$response" | jq -r '.need_ai // "false"' 2>/dev/null)
+    else
+        if [[ "$response" == *'"need_ai":true'* ]]; then
+            _AWEN_NEED_AI="true"
+        else
+            _AWEN_NEED_AI="false"
+        fi
+    fi
+
     # Parse all suggestions
     _AWEN_MENU_TEXTS=()
     _AWEN_MENU_SOURCES=()
@@ -595,7 +607,7 @@ _awen_suggest_local() {
     local now_ms=$(_awen_now_ms)
     local elapsed=$(( now_ms - _AWEN_LAST_LOCAL_MS ))
     if (( elapsed < _AWEN_LOCAL_THROTTLE_MS )); then
-        _awen_schedule_ai
+        [[ "$_AWEN_NEED_AI" != "false" ]] && _awen_schedule_ai
         return
     fi
     _AWEN_LAST_LOCAL_MS=$now_ms
@@ -607,7 +619,8 @@ _awen_suggest_local() {
     response=$(_awen_send_nc "$request")
     _awen_apply_response "$response"
 
-    _awen_schedule_ai
+    # Only schedule AI Phase 2 if daemon signals it would be useful
+    [[ "$_AWEN_NEED_AI" != "false" ]] && _awen_schedule_ai
 }
 
 # Cancel any pending async AI request (pipe stays open permanently)

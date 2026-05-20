@@ -25,6 +25,7 @@ impl Arbitrator {
             suggestions,
             hint,
             warning,
+            need_ai: false,
         }
     }
 
@@ -205,6 +206,7 @@ mod tests {
             suggestions: vec![make_suggestion("ls -la", SuggestionSource::History, 0.8)],
             hint: None,
             warning: None,
+            need_ai: false,
         };
 
         let ai = make_suggestion("ls -la --color", SuggestionSource::Ai, 0.9);
@@ -224,6 +226,7 @@ mod tests {
             )],
             hint: None,
             warning: None,
+            need_ai: false,
         };
 
         let ai = make_suggestion("docker run", SuggestionSource::Ai, 0.9);

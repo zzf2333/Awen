@@ -357,9 +357,7 @@ mod tests {
         layer
             .record("pkill -f daemon; sleep 1; source init", "/app", 0)
             .unwrap();
-        layer
-            .record("echo git add something", "/app", 0)
-            .unwrap();
+        layer.record("echo git add something", "/app", 0).unwrap();
 
         let results = layer.suggest("git a", "/app", 10);
         for s in &results {

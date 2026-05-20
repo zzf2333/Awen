@@ -261,6 +261,31 @@ pub fn parse_nl_suggestion(ai_response: &str) -> Option<Suggestion> {
     })
 }
 
+pub fn build_error_recovery_prompt(context: &RequestContext) -> String {
+    let mut parts = Vec::new();
+    parts.push("[CONTEXT_START]".into());
+    parts.push(format!("Working directory: {}", context.cwd));
+    parts.push(format!("Shell: zsh on {}", std::env::consts::OS));
+    if let Some(branch) = &context.git_branch {
+        parts.push(format!("Git branch: {branch}"));
+    }
+    if let Some(cmd) = &context.last_command {
+        parts.push(format!("Failed command: {cmd}"));
+    }
+    if let Some(code) = context.last_exit_code {
+        parts.push(format!("Exit code: {code}"));
+    }
+    if let Some(stderr) = &context.last_stderr {
+        parts.push(format!("Error output: {stderr}"));
+    }
+    if !context.env_hints.is_empty() {
+        parts.push(format!("Environment: {}", context.env_hints.join(", ")));
+    }
+    parts.push("[CONTEXT_END]".into());
+    parts.push("Suggest a recovery command:".into());
+    parts.join("\n")
+}
+
 pub fn build_prompt(input: &str, context: &RequestContext) -> String {
     let mut parts = Vec::new();
 
@@ -591,5 +616,44 @@ mod tests {
     fn test_parse_nl_suggestion_too_long() {
         let long = "a".repeat(301);
         assert!(parse_nl_suggestion(&long).is_none());
+    }
+
+    #[test]
+    fn test_build_error_recovery_prompt() {
+        let ctx = RequestContext {
+            cwd: "/home/user/project".into(),
+            last_command: Some("cargo build".into()),
+            last_exit_code: Some(1),
+            last_stderr: Some("error: cannot find crate `serde`".into()),
+            git_branch: Some("main".into()),
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        };
+        let prompt = build_error_recovery_prompt(&ctx);
+        assert!(prompt.contains("Failed command: cargo build"));
+        assert!(prompt.contains("Exit code: 1"));
+        assert!(prompt.contains("cannot find crate"));
+        assert!(prompt.contains("[CONTEXT_START]"));
+        assert!(prompt.contains("[CONTEXT_END]"));
+        assert!(prompt.contains("recovery command"));
+    }
+
+    #[test]
+    fn test_build_error_recovery_prompt_minimal() {
+        let ctx = RequestContext {
+            cwd: "/tmp".into(),
+            last_command: None,
+            last_exit_code: None,
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        };
+        let prompt = build_error_recovery_prompt(&ctx);
+        assert!(prompt.contains("/tmp"));
+        assert!(prompt.contains("recovery command"));
+        assert!(!prompt.contains("Failed command"));
     }
 }

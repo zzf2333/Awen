@@ -36,7 +36,7 @@ Terminal (Ghostty / Kitty / WezTerm / Alacritty)
   └─ zsh (ZLE Widget)
        └─ Shell Plugin (awen.zsh)
             │  Phase 1 (sync): skip_ai=true  → local results in <20ms
-            │  Phase 2 (async): skip_ai=false → AI result after idle delay
+            │  Phase 2 (async, conditional): skip_ai=false → AI fallback when local insufficient
             │ Unix Socket
             └─ Daemon (Rust + tokio)
                  ├─ Context Engine (session / repo / git)
@@ -120,6 +120,8 @@ provider = "deepseek"           # deepseek | ollama
 debounce_ms = 300               # Delay before triggering AI after typing stops
 timeout_ms = 30000              # AI request timeout in ms (async, never blocks input)
 max_tokens = 1024               # Max tokens for AI generation (reasoning models need more)
+min_local_candidates = 2        # AI triggers only when local results < this AND confidence < threshold
+min_local_confidence = 0.6      # AI triggers only when max confidence < this AND count < threshold
 
 [ai.deepseek]
 api_key = ""                    # Or set DEEPSEEK_API_KEY env var

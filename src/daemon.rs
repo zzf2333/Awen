@@ -25,20 +25,52 @@ struct DaemonState {
     last_ai_request_at: Option<std::time::Instant>,
 }
 
-fn should_request_ai(
+#[allow(clippy::too_many_arguments)]
+fn ai_is_useful(
     input: &str,
     has_warning: bool,
+    local_candidate_count: usize,
     max_local_confidence: f64,
-    last_ai_request_at: Option<std::time::Instant>,
-    debounce_ms: u64,
+    has_failure_context: bool,
+    local_failure_matched: bool,
+    min_local_candidates: usize,
+    min_local_confidence: f64,
 ) -> bool {
-    if input.len() < 2 {
-        return false;
-    }
     if has_warning {
         return false;
     }
-    if max_local_confidence >= 0.9 {
+    if has_failure_context && !local_failure_matched {
+        return true;
+    }
+    if input.len() < 2 {
+        return false;
+    }
+    local_candidate_count < min_local_candidates && max_local_confidence < min_local_confidence
+}
+
+#[allow(clippy::too_many_arguments)]
+fn should_request_ai(
+    input: &str,
+    has_warning: bool,
+    local_candidate_count: usize,
+    max_local_confidence: f64,
+    has_failure_context: bool,
+    local_failure_matched: bool,
+    last_ai_request_at: Option<std::time::Instant>,
+    debounce_ms: u64,
+    min_local_candidates: usize,
+    min_local_confidence: f64,
+) -> bool {
+    if !ai_is_useful(
+        input,
+        has_warning,
+        local_candidate_count,
+        max_local_confidence,
+        has_failure_context,
+        local_failure_matched,
+        min_local_candidates,
+        min_local_confidence,
+    ) {
         return false;
     }
     if let Some(last_at) = last_ai_request_at {
@@ -261,29 +293,114 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
     }
 
     if req.input.is_empty() {
-        let state = state.lock().await;
-        let mut suggestions = state.history.suggest_next(&req.context.cwd, 5);
+        let (
+            suggestions,
+            hint,
+            local_failure_matched,
+            has_failure_context,
+            ai_provider,
+            max_tokens,
+            timeout_ms,
+            stderr_max_chars,
+            debounce_ms,
+            last_ai_request_at,
+        ) = {
+            let state = state.lock().await;
+            let mut suggestions = state.history.suggest_next(&req.context.cwd, 5);
 
-        let mut hint = None;
-        if let Some(exit_code) = req.context.last_exit_code
-            && exit_code != 0
-            && let Some(stderr) = &req.context.last_stderr
-            && let Some((fail_suggestion, fail_hint)) =
-                state.failure.match_failure(stderr, exit_code)
-        {
-            suggestions.insert(0, fail_suggestion);
-            hint = Some(fail_hint);
-        }
+            let mut hint = None;
+            let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
+                && exit_code != 0
+                && let Some(stderr) = &req.context.last_stderr
+                && let Some((fail_suggestion, fail_hint)) =
+                    state.failure.match_failure(stderr, exit_code)
+            {
+                suggestions.insert(0, fail_suggestion);
+                hint = Some(fail_hint);
+                true
+            } else {
+                false
+            };
 
-        return Response::Suggest(SuggestResponse {
+            let has_failure_context = req.context.last_exit_code.is_some_and(|c| c != 0)
+                && req.context.last_stderr.is_some();
+
+            (
+                suggestions,
+                hint,
+                local_failure_matched,
+                has_failure_context,
+                state.ai_provider.clone(),
+                state.config.ai.max_tokens,
+                state.config.ai.timeout_ms,
+                state.config.context.stderr_max_chars,
+                state.config.ai.debounce_ms,
+                state.last_ai_request_at,
+            )
+        };
+
+        let need_ai = has_failure_context && !local_failure_matched && ai_provider.is_some();
+
+        let mut response = SuggestResponse {
             suggestions,
             hint,
             warning: None,
-        });
+            need_ai,
+        };
+
+        if !req.skip_ai
+            && need_ai
+            && let Some(provider) = ai_provider
+        {
+            let debounce_ok = last_ai_request_at
+                .map(|t| t.elapsed().as_millis() as u64 >= debounce_ms)
+                .unwrap_or(true);
+            if debounce_ok {
+                {
+                    let mut st = state.lock().await;
+                    st.last_ai_request_at = Some(std::time::Instant::now());
+                }
+                let mut ctx = req.context.clone();
+                crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
+                let prompt = ai::build_error_recovery_prompt(&ctx);
+                tracing::info!("AI error recovery started");
+
+                let ai_start = std::time::Instant::now();
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    provider.complete_nl(&prompt, max_tokens),
+                )
+                .await
+                {
+                    Ok(Ok(ai_response)) => {
+                        tracing::info!(
+                            "AI error recovery received, latency_ms={}",
+                            ai_start.elapsed().as_millis()
+                        );
+                        if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
+                            Arbitrator::merge_ai_suggestion(&mut response, suggestion);
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        tracing::info!("AI error recovery error: {e}");
+                    }
+                    Err(_) => {
+                        tracing::info!(
+                            "AI error recovery timed out, latency_ms={}",
+                            ai_start.elapsed().as_millis()
+                        );
+                    }
+                }
+            }
+        }
+
+        return Response::Suggest(response);
     }
 
     let (
         mut response,
+        local_failure_matched,
+        has_failure_context,
         ai_provider,
         max_tokens,
         timeout_ms,
@@ -291,6 +408,8 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         has_warning,
         debounce_ms,
         last_ai_request_at,
+        min_local_candidates,
+        min_local_confidence,
     ) = {
         let mut state = state.lock().await;
         state.context.update_cwd(req.context.cwd.clone());
@@ -304,7 +423,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         suggestions.extend(specs_results);
 
         let mut hint = None;
-        if let Some(exit_code) = req.context.last_exit_code
+        let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
             && exit_code != 0
             && let Some(stderr) = &req.context.last_stderr
             && let Some((fail_suggestion, fail_hint)) =
@@ -312,7 +431,13 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         {
             suggestions.push(fail_suggestion);
             hint = Some(fail_hint);
-        }
+            true
+        } else {
+            false
+        };
+
+        let has_failure_context =
+            req.context.last_exit_code.is_some_and(|c| c != 0) && req.context.last_stderr.is_some();
 
         let warning = if state.config.ui.risk_detection {
             state.risk.check(&req.input)
@@ -328,9 +453,13 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         let stderr_max_chars = state.config.context.stderr_max_chars;
         let debounce_ms = state.config.ai.debounce_ms;
         let last_ai_request_at = state.last_ai_request_at;
+        let min_local_candidates = state.config.ai.min_local_candidates;
+        let min_local_confidence = state.config.ai.min_local_confidence;
 
         (
             response,
+            local_failure_matched,
+            has_failure_context,
             ai_provider,
             max_tokens,
             timeout_ms,
@@ -338,33 +467,82 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             has_warning,
             debounce_ms,
             last_ai_request_at,
+            min_local_candidates,
+            min_local_confidence,
         )
     };
 
+    let local_candidate_count = response.suggestions.len();
+    let max_local_confidence = response
+        .suggestions
+        .iter()
+        .map(|s| s.confidence)
+        .fold(0.0_f64, f64::max);
+
+    let ai_useful = ai_is_useful(
+        &req.input,
+        has_warning,
+        local_candidate_count,
+        max_local_confidence,
+        has_failure_context,
+        local_failure_matched,
+        min_local_candidates,
+        min_local_confidence,
+    );
+
+    response.need_ai = ai_useful && ai_provider.is_some();
+
     if !req.skip_ai
         && let Some(provider) = ai_provider
-    {
-        let max_local_confidence = response
-            .suggestions
-            .iter()
-            .map(|s| s.confidence)
-            .fold(0.0_f64, f64::max);
-
-        if should_request_ai(
+        && should_request_ai(
             &req.input,
             has_warning,
+            local_candidate_count,
             max_local_confidence,
+            has_failure_context,
+            local_failure_matched,
             last_ai_request_at,
             debounce_ms,
-        ) {
+            min_local_candidates,
+            min_local_confidence,
+        )
+    {
+        {
+            let mut state = state.lock().await;
+            state.last_ai_request_at = Some(std::time::Instant::now());
+        }
+
+        let mut ctx = req.context.clone();
+        crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
+
+        let is_recovery = has_failure_context && !local_failure_matched;
+        if is_recovery {
+            let prompt = ai::build_error_recovery_prompt(&ctx);
+            tracing::info!("AI error recovery started, input_len={}", req.input.len());
+
+            let ai_start = std::time::Instant::now();
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(timeout_ms),
+                provider.complete_nl(&prompt, max_tokens),
+            )
+            .await
             {
-                let mut state = state.lock().await;
-                state.last_ai_request_at = Some(std::time::Instant::now());
+                Ok(Ok(ai_response)) => {
+                    tracing::info!(
+                        "AI error recovery received, latency_ms={}",
+                        ai_start.elapsed().as_millis()
+                    );
+                    if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
+                        Arbitrator::merge_ai_suggestion(&mut response, suggestion);
+                    }
+                }
+                Ok(Err(e)) => tracing::info!("AI error recovery error: {e}"),
+                Err(_) => tracing::info!(
+                    "AI error recovery timed out, latency_ms={}",
+                    ai_start.elapsed().as_millis()
+                ),
             }
-
-            let mut ctx = req.context.clone();
-            crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
-
+        } else {
             let prompt = ai::build_prompt(&req.input, &ctx);
             tracing::info!("AI completion started, input_len={}", req.input.len());
 
@@ -404,10 +582,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
     Response::Suggest(response)
 }
 
-async fn handle_nl_generate(
-    req: NlGenerateRequest,
-    state: &Arc<Mutex<DaemonState>>,
-) -> Response {
+async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
     let (ai_provider, max_tokens, timeout_ms, stderr_max_chars, risk_enabled) = {
         let state = state.lock().await;
         (
@@ -599,22 +774,111 @@ pub async fn send_request_to(
 mod tests {
     use super::*;
 
+    // ai_is_useful tests
+
+    #[test]
+    fn test_ai_is_useful_warning_blocks() {
+        assert!(!ai_is_useful("git ch", true, 0, 0.0, false, false, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_error_recovery() {
+        assert!(ai_is_useful("", false, 0, 0.0, true, false, 2, 0.6));
+        assert!(ai_is_useful("gi", false, 0, 0.0, true, false, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_error_recovery_local_matched() {
+        assert!(!ai_is_useful("", false, 1, 0.95, true, true, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_short_input_no_failure() {
+        assert!(!ai_is_useful("g", false, 0, 0.0, false, false, 2, 0.6));
+        assert!(!ai_is_useful("", false, 0, 0.0, false, false, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_sufficient_count() {
+        assert!(!ai_is_useful("git ch", false, 3, 0.3, false, false, 2, 0.6));
+        assert!(!ai_is_useful("git ch", false, 2, 0.1, false, false, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_sufficient_confidence() {
+        assert!(!ai_is_useful("git ch", false, 1, 0.8, false, false, 2, 0.6));
+        assert!(!ai_is_useful("git ch", false, 0, 0.6, false, false, 2, 0.6));
+    }
+
+    #[test]
+    fn test_ai_is_useful_both_insufficient() {
+        assert!(ai_is_useful("myapp d", false, 1, 0.3, false, false, 2, 0.6));
+        assert!(ai_is_useful("myapp d", false, 0, 0.0, false, false, 2, 0.6));
+        assert!(ai_is_useful(
+            "myapp d", false, 1, 0.59, false, false, 2, 0.6
+        ));
+    }
+
+    // should_request_ai tests
+
     #[test]
     fn test_should_request_ai_short_input() {
-        assert!(!should_request_ai("g", false, 0.0, None, 300));
-        assert!(should_request_ai("rm", false, 0.0, None, 300));
-        assert!(should_request_ai("gi", false, 0.0, None, 300));
+        assert!(!should_request_ai(
+            "g", false, 0, 0.0, false, false, None, 300, 2, 0.6
+        ));
+        assert!(should_request_ai(
+            "rm", false, 0, 0.0, false, false, None, 300, 2, 0.6
+        ));
+        assert!(should_request_ai(
+            "gi", false, 0, 0.0, false, false, None, 300, 2, 0.6
+        ));
     }
 
     #[test]
     fn test_should_request_ai_warning_present() {
-        assert!(!should_request_ai("rm -rf /", true, 0.0, None, 300));
+        assert!(!should_request_ai(
+            "rm -rf /", true, 0, 0.0, false, false, None, 300, 2, 0.6
+        ));
     }
 
     #[test]
-    fn test_should_request_ai_high_confidence() {
-        assert!(!should_request_ai("git checkout", false, 0.95, None, 300));
-        assert!(!should_request_ai("git checkout", false, 0.9, None, 300));
+    fn test_should_request_ai_sufficient_local() {
+        assert!(!should_request_ai(
+            "git checkout",
+            false,
+            3,
+            0.95,
+            false,
+            false,
+            None,
+            300,
+            2,
+            0.6
+        ));
+        assert!(!should_request_ai(
+            "git checkout",
+            false,
+            2,
+            0.7,
+            false,
+            false,
+            None,
+            300,
+            2,
+            0.6
+        ));
+        assert!(!should_request_ai(
+            "git checkout",
+            false,
+            1,
+            0.9,
+            false,
+            false,
+            None,
+            300,
+            2,
+            0.6
+        ));
     }
 
     #[test]
@@ -623,22 +887,47 @@ mod tests {
         assert!(!should_request_ai(
             "docker run",
             false,
+            0,
             0.0,
-            Some(recent),
-            300,
-        ));
-        assert!(!should_request_ai(
-            "cargo build",
             false,
-            0.0,
+            false,
             Some(recent),
             300,
+            2,
+            0.6
         ));
     }
 
     #[test]
     fn test_should_request_ai_happy_path() {
-        assert!(should_request_ai("docker run", false, 0.5, None, 300));
-        assert!(should_request_ai("git checkout", false, 0.89, None, 300));
+        assert!(should_request_ai(
+            "docker run",
+            false,
+            0,
+            0.5,
+            false,
+            false,
+            None,
+            300,
+            2,
+            0.6
+        ));
+        assert!(should_request_ai(
+            "myapp", false, 1, 0.3, false, false, None, 300, 2, 0.6
+        ));
+    }
+
+    #[test]
+    fn test_should_request_ai_sufficient_confidence_skips() {
+        assert!(!should_request_ai(
+            "git ch", false, 1, 0.9, false, false, None, 300, 2, 0.6
+        ));
+    }
+
+    #[test]
+    fn test_should_request_ai_error_recovery_bypasses_input_check() {
+        assert!(should_request_ai(
+            "", false, 0, 0.0, true, false, None, 300, 2, 0.6
+        ));
     }
 }
