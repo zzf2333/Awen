@@ -244,6 +244,32 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
+    if req.nl_mode {
+        return handle_nl_suggest(req, state).await;
+    }
+
+    if req.input.is_empty() {
+        let state = state.lock().await;
+        let mut suggestions = state.history.suggest_next(&req.context.cwd, 5);
+
+        let mut hint = None;
+        if let Some(exit_code) = req.context.last_exit_code
+            && exit_code != 0
+            && let Some(stderr) = &req.context.last_stderr
+            && let Some((fail_suggestion, fail_hint)) =
+                state.failure.match_failure(stderr, exit_code)
+        {
+            suggestions.insert(0, fail_suggestion);
+            hint = Some(fail_hint);
+        }
+
+        return Response::Suggest(SuggestResponse {
+            suggestions,
+            hint,
+            warning: None,
+        });
+    }
+
     let (
         mut response,
         ai_provider,
@@ -319,8 +345,6 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             last_ai_request_at,
             debounce_ms,
         ) {
-            // Update debounce timestamp BEFORE the AI call so concurrent
-            // requests within the debounce window are rejected.
             {
                 let mut state = state.lock().await;
                 state.last_ai_request_at = Some(std::time::Instant::now());
@@ -362,6 +386,69 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
     }
 
     Response::Suggest(response)
+}
+
+async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
+    let (ai_provider, max_tokens, timeout_ms, stderr_max_chars) = {
+        let state = state.lock().await;
+        (
+            state.ai_provider.clone(),
+            state.config.ai.max_tokens.max(200),
+            state.config.ai.timeout_ms,
+            state.config.context.stderr_max_chars,
+        )
+    };
+
+    let Some(provider) = ai_provider else {
+        return Response::Suggest(SuggestResponse {
+            suggestions: vec![],
+            hint: None,
+            warning: None,
+        });
+    };
+
+    let nl_query = req.input.strip_prefix('#').unwrap_or(&req.input).trim();
+    if nl_query.is_empty() {
+        return Response::Suggest(SuggestResponse {
+            suggestions: vec![],
+            hint: None,
+            warning: None,
+        });
+    }
+
+    let mut ctx = req.context.clone();
+    crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
+    let prompt = ai::build_nl_prompt(nl_query, &ctx);
+    tracing::info!("NL request: {:?}", nl_query);
+
+    let mut suggestions = Vec::new();
+
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        provider.complete_nl(&prompt, max_tokens),
+    )
+    .await
+    {
+        Ok(Ok(ai_response)) => {
+            tracing::info!("NL raw response: {:?}", ai_response);
+            if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
+                tracing::info!("NL suggestion accepted: {:?}", suggestion.text);
+                suggestions.push(suggestion);
+            }
+        }
+        Ok(Err(e)) => {
+            tracing::info!("NL completion error: {e}");
+        }
+        Err(_) => {
+            tracing::info!("NL completion timed out ({}ms)", timeout_ms);
+        }
+    }
+
+    Response::Suggest(SuggestResponse {
+        suggestions,
+        hint: None,
+        warning: None,
+    })
 }
 
 async fn handle_record(req: RecordCommandRequest, state: &Arc<Mutex<DaemonState>>) -> Response {

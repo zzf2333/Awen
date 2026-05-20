@@ -36,6 +36,11 @@ impl AiProvider for SlowMockProvider {
         tokio::time::sleep(Duration::from_secs(2)).await;
         Ok("mock-slow-result".into())
     }
+
+    async fn complete_nl(&self, _prompt: &str, _max_tokens: u32) -> Result<String, AiError> {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        Ok("echo hello".into())
+    }
 }
 
 struct FastMockProvider {
@@ -60,6 +65,12 @@ impl AiProvider for FastMockProvider {
         self.call_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok("pods --all-namespaces".into())
+    }
+
+    async fn complete_nl(&self, _prompt: &str, _max_tokens: u32) -> Result<String, AiError> {
+        self.call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok("kubectl get pods --all-namespaces".into())
     }
 }
 
@@ -272,6 +283,7 @@ async fn test_suggest_specs_completion() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -334,6 +346,7 @@ async fn test_suggest_history_after_record() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -380,6 +393,7 @@ async fn test_suggest_failure_recovery() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -430,6 +444,7 @@ async fn test_suggest_risk_warning() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -472,6 +487,7 @@ async fn test_suggest_no_warning_for_safe_command() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -577,6 +593,7 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -610,6 +627,7 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -645,6 +663,7 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -751,6 +770,7 @@ async fn test_suggest_with_sensitive_context() {
             },
             timestamp: None,
             skip_ai: false,
+            nl_mode: false,
         }))
         .await;
 
@@ -792,6 +812,7 @@ async fn test_risk_warning_with_suggestions_coexist() {
             },
             timestamp: None,
             skip_ai: false,
+            nl_mode: false,
         }))
         .await;
 
@@ -838,6 +859,7 @@ async fn test_ai_disabled_local_suggestions_work() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -890,6 +912,7 @@ async fn test_ai_timeout_returns_local_suggestions() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let start = std::time::Instant::now();
@@ -962,6 +985,7 @@ async fn test_ai_suggestion_merged_into_response() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1017,6 +1041,7 @@ async fn test_ai_debounce_skips_second_request() {
             },
             timestamp: None,
             skip_ai: false,
+            nl_mode: false,
         })
     };
 
@@ -1090,6 +1115,7 @@ async fn test_skip_ai_returns_local_only() {
         },
         timestamp: None,
         skip_ai: true,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1140,6 +1166,7 @@ async fn test_skip_ai_fast_response_with_slow_provider() {
         },
         timestamp: None,
         skip_ai: true,
+        nl_mode: false,
     });
 
     let start = std::time::Instant::now();
@@ -1194,6 +1221,7 @@ async fn test_skip_ai_false_still_calls_ai() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1247,6 +1275,7 @@ async fn test_skip_ai_false_risk_warning_still_skips_ai() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1310,6 +1339,7 @@ async fn test_skip_ai_false_high_confidence_local_skips_ai() {
         },
         timestamp: None,
         skip_ai: false,
+        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;

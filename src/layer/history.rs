@@ -114,8 +114,11 @@ impl HistoryLayer {
                 let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
                 let prefix_bonus = if command.starts_with(input) { 2.0 } else { 1.0 };
 
-                let score =
-                    match_score as f64 * recency_decay * frequency_boost * dir_affinity * prefix_bonus;
+                let score = match_score as f64
+                    * recency_decay
+                    * frequency_boost
+                    * dir_affinity
+                    * prefix_bonus;
                 scored.push((score, command.clone()));
             }
         }
@@ -132,6 +135,62 @@ impl HistoryLayer {
                 text,
                 source: SuggestionSource::History,
                 confidence: (score / max_score).min(1.0),
+                description: None,
+            })
+            .collect()
+    }
+
+    pub fn suggest_next(&self, cwd: &str, limit: usize) -> Vec<Suggestion> {
+        let conn = match Connection::open(&self.db_path) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT command, cwd, timestamp, count FROM commands
+                 ORDER BY timestamp DESC LIMIT 200",
+            )
+            .unwrap();
+
+        let rows: Vec<(String, String, i64, i64)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let now = chrono::Utc::now().timestamp();
+        let mut scored: Vec<(f64, String)> = Vec::new();
+
+        for (command, cmd_cwd, timestamp, count) in &rows {
+            let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
+            let recency = 1.0 / age_hours.ln().max(1.0);
+            let frequency = (*count as f64).ln().max(1.0);
+            let dir_affinity = if cmd_cwd == cwd { 3.0 } else { 1.0 };
+
+            let score = recency * frequency * dir_affinity;
+            scored.push((score, command.clone()));
+        }
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.dedup_by(|a, b| a.1 == b.1);
+
+        let max_score = scored.first().map(|s| s.0).unwrap_or(1.0).max(1.0);
+
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(score, text)| Suggestion {
+                text,
+                source: SuggestionSource::History,
+                confidence: (score / max_score * 0.5).min(0.5),
                 description: None,
             })
             .collect()
@@ -244,5 +303,40 @@ mod tests {
 
         layer.record("cargo build", "/tmp", 0).unwrap();
         assert_eq!(layer.count(), 1);
+    }
+
+    #[test]
+    fn test_suggest_next() {
+        let (_dir, layer) = setup();
+        layer.record("cargo build", "/project", 0).unwrap();
+        layer.record("cargo test", "/project", 0).unwrap();
+        layer.record("ls -la", "/other", 0).unwrap();
+
+        let results = layer.suggest_next("/project", 5);
+        assert!(!results.is_empty());
+        assert!(
+            results
+                .iter()
+                .all(|s| s.source == SuggestionSource::History)
+        );
+        assert!(results.iter().all(|s| s.confidence <= 0.5));
+    }
+
+    #[test]
+    fn test_suggest_next_dir_affinity() {
+        let (_dir, layer) = setup();
+        layer.record("make build", "/project-a", 0).unwrap();
+        layer.record("npm test", "/project-b", 0).unwrap();
+
+        let results = layer.suggest_next("/project-a", 5);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].text, "make build");
+    }
+
+    #[test]
+    fn test_suggest_next_empty_db() {
+        let (_dir, layer) = setup();
+        let results = layer.suggest_next("/tmp", 5);
+        assert!(results.is_empty());
     }
 }
