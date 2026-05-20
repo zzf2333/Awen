@@ -96,7 +96,7 @@ impl DeepSeekProvider {
             .await
             .map_err(|e| AiError::ParseFailed(e.to_string()))?;
 
-        tracing::info!("DeepSeek JSON: {}", json);
+        tracing::debug!("DeepSeek response: {}", json);
 
         let content = json["choices"][0]["message"]["content"]
             .as_str()
@@ -104,6 +104,7 @@ impl DeepSeekProvider {
             .unwrap_or_default();
 
         if !content.is_empty() {
+            tracing::info!("DeepSeek response received, content_len={}", content.len());
             return Ok(content);
         }
 

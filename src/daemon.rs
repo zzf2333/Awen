@@ -354,8 +354,9 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
 
             let prompt = ai::build_prompt(&req.input, &ctx);
-            tracing::info!("AI request for input: {:?}", req.input);
+            tracing::info!("AI completion started, input_len={}", req.input.len());
 
+            let ai_start = std::time::Instant::now();
             match tokio::time::timeout(
                 std::time::Duration::from_millis(timeout_ms),
                 provider.complete(&prompt, max_tokens),
@@ -363,23 +364,26 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             .await
             {
                 Ok(Ok(ai_response)) => {
-                    tracing::info!("AI raw response: {:?}", ai_response);
+                    tracing::info!(
+                        "AI completion received, latency_ms={}, response_len={}",
+                        ai_start.elapsed().as_millis(),
+                        ai_response.len()
+                    );
                     if let Some(suggestion) = ai::parse_ai_suggestion(&req.input, &ai_response) {
-                        tracing::info!("AI suggestion accepted: {:?}", suggestion.text);
+                        tracing::info!("AI suggestion accepted, len={}", suggestion.text.len());
                         Arbitrator::merge_ai_suggestion(&mut response, suggestion);
-                        tracing::info!(
-                            "Response after merge: {} suggestions",
-                            response.suggestions.len()
-                        );
                     } else {
-                        tracing::info!("AI response rejected by parse_ai_suggestion");
+                        tracing::info!("AI suggestion rejected by parser");
                     }
                 }
                 Ok(Err(e)) => {
                     tracing::info!("AI completion error: {e}");
                 }
                 Err(_) => {
-                    tracing::info!("AI completion timed out ({}ms)", timeout_ms);
+                    tracing::info!(
+                        "AI completion timed out, latency_ms={}",
+                        ai_start.elapsed().as_millis()
+                    );
                 }
             }
         }
@@ -419,10 +423,11 @@ async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>)
     let mut ctx = req.context.clone();
     crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
     let prompt = ai::build_nl_prompt(nl_query, &ctx);
-    tracing::info!("NL request: {:?}", nl_query);
+    tracing::info!("NL generation started, query_len={}", nl_query.len());
 
     let mut suggestions = Vec::new();
 
+    let ai_start = std::time::Instant::now();
     match tokio::time::timeout(
         std::time::Duration::from_millis(timeout_ms),
         provider.complete_nl(&prompt, max_tokens),
@@ -430,17 +435,24 @@ async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>)
     .await
     {
         Ok(Ok(ai_response)) => {
-            tracing::info!("NL raw response: {:?}", ai_response);
+            tracing::info!(
+                "NL generation received, latency_ms={}, response_len={}",
+                ai_start.elapsed().as_millis(),
+                ai_response.len()
+            );
             if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
-                tracing::info!("NL suggestion accepted: {:?}", suggestion.text);
+                tracing::info!("NL suggestion accepted, len={}", suggestion.text.len());
                 suggestions.push(suggestion);
             }
         }
         Ok(Err(e)) => {
-            tracing::info!("NL completion error: {e}");
+            tracing::info!("NL generation error: {e}");
         }
         Err(_) => {
-            tracing::info!("NL completion timed out ({}ms)", timeout_ms);
+            tracing::info!(
+                "NL generation timed out, latency_ms={}",
+                ai_start.elapsed().as_millis()
+            );
         }
     }
 
