@@ -367,61 +367,82 @@ _awen_now_ms() {
     fi
 }
 
-# Build JSON request for suggest
-# Args: $1=input $2=cursor $3=skip_ai ("true"/"false")
-_awen_build_request() {
-    local input="$1" cursor="$2" skip_ai="$3" nl_mode="${4:-false}"
-
+_awen_build_context_json() {
+    local cwd="$(pwd)"
+    local git_branch=""
+    if command -v git &>/dev/null; then
+        git_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    fi
+    local last_cmd="${_AWEN_LAST_COMMAND:-}"
     local last_exit="${_AWEN_LAST_EXIT_CODE:-0}"
     local last_stderr=""
     if [[ -f "$_AWEN_LAST_STDERR_FILE" ]]; then
         last_stderr=$(head -c 500 "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
     fi
 
-    local cwd="$(pwd)"
-    local git_branch=""
-    if command -v git &>/dev/null; then
-        git_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    fi
-
-    local last_cmd="${_AWEN_LAST_COMMAND:-}"
-
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
         jq -cn \
-            --arg input "$input" \
-            --argjson cursor "$cursor" \
             --arg cwd "$cwd" \
             --arg last_cmd "${last_cmd:-}" \
             --argjson exit_code "${last_exit:-0}" \
             --arg stderr "${last_stderr:-}" \
             --arg branch "${git_branch:-}" \
-            --argjson skip_ai "$skip_ai" \
-            --argjson nl_mode "$nl_mode" \
-            '{type: "suggest", input: $input, cursor_pos: $cursor, skip_ai: $skip_ai, nl_mode: $nl_mode, context: {
-                cwd: $cwd,
-                last_command: (if $last_cmd == "" then null else $last_cmd end),
-                last_exit_code: $exit_code,
-                last_stderr: (if $stderr == "" then null else $stderr end),
-                git_branch: (if $branch == "" then null else $branch end),
-                git_status: null, session_commands: [], env_hints: []
-            }}' 2>/dev/null
+            '{cwd: $cwd,
+              last_command: (if $last_cmd == "" then null else $last_cmd end),
+              last_exit_code: $exit_code,
+              last_stderr: (if $stderr == "" then null else $stderr end),
+              git_branch: (if $branch == "" then null else $branch end),
+              git_status: null, session_commands: [], env_hints: []}' 2>/dev/null
     else
-        local esc_input=$(_awen_json_escape "$input")
         local esc_cwd=$(_awen_json_escape "$cwd")
         local cmd_json="null"
-        if [[ -n "$last_cmd" ]]; then
-            cmd_json="\"$(_awen_json_escape "$last_cmd")\""
-        fi
+        [[ -n "$last_cmd" ]] && cmd_json="\"$(_awen_json_escape "$last_cmd")\""
         local stderr_json="null"
-        if [[ -n "$last_stderr" ]]; then
-            stderr_json="\"$(_awen_json_escape "$last_stderr")\""
-        fi
+        [[ -n "$last_stderr" ]] && stderr_json="\"$(_awen_json_escape "$last_stderr")\""
         local branch_json="null"
-        if [[ -n "$git_branch" ]]; then
-            branch_json="\"$(_awen_json_escape "$git_branch")\""
-        fi
-        printf '{"type":"suggest","input":"%s","cursor_pos":%d,"skip_ai":%s,"nl_mode":%s,"context":{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}}' \
-            "$esc_input" "$cursor" "$skip_ai" "$nl_mode" "$esc_cwd" "$cmd_json" "${last_exit:-0}" "$stderr_json" "$branch_json"
+        [[ -n "$git_branch" ]] && branch_json="\"$(_awen_json_escape "$git_branch")\""
+        printf '{"cwd":"%s","last_command":%s,"last_exit_code":%s,"last_stderr":%s,"git_branch":%s,"git_status":null,"session_commands":[],"env_hints":[]}' \
+            "$esc_cwd" "$cmd_json" "${last_exit:-0}" "$stderr_json" "$branch_json"
+    fi
+}
+
+# Build JSON request for suggest (completion mode)
+# Args: $1=input $2=cursor $3=skip_ai ("true"/"false")
+_awen_build_request() {
+    local input="$1" cursor="$2" skip_ai="$3"
+
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        local ctx=$(_awen_build_context_json)
+        jq -cn \
+            --arg input "$input" \
+            --argjson cursor "$cursor" \
+            --argjson skip_ai "$skip_ai" \
+            --argjson ctx "$ctx" \
+            '{type: "suggest", input: $input, cursor_pos: $cursor, skip_ai: $skip_ai, context: $ctx}' 2>/dev/null
+    else
+        local esc_input=$(_awen_json_escape "$input")
+        local ctx=$(_awen_build_context_json)
+        printf '{"type":"suggest","input":"%s","cursor_pos":%d,"skip_ai":%s,"context":%s}' \
+            "$esc_input" "$cursor" "$skip_ai" "$ctx"
+    fi
+}
+
+# Build JSON request for NL generation
+# Args: $1=query (without "# " prefix)
+_awen_build_nl_request() {
+    local query="$1"
+
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        local ctx=$(_awen_build_context_json)
+        jq -cn \
+            --arg query "$query" \
+            --argjson ctx "$ctx" \
+            '{type: "nl_generate", query: $query, context: $ctx}' 2>/dev/null
+    else
+        local esc_query=$(_awen_json_escape "$query")
+        local ctx=$(_awen_build_context_json)
+        printf '{"type":"nl_generate","query":"%s","context":%s}' \
+            "$esc_query" "$ctx"
     fi
 }
 
@@ -607,18 +628,19 @@ _awen_schedule_ai() {
     [[ ! -S "$_AWEN_SOCKET" ]] && return
     command -v socat &>/dev/null || return
 
-    local nl_mode=false
     local delay="$_AWEN_AI_DELAY"
+    local request
     if [[ "$BUFFER" == "# "* ]]; then
-        nl_mode=true
         delay=0.3
+        local query="${BUFFER#\# }"
+        request=$(_awen_build_nl_request "$query")
+    else
+        request=$(_awen_build_request "$BUFFER" "$CURSOR" false)
     fi
 
     _AWEN_AI_SNAPSHOT="$BUFFER"
     (( _AWEN_AI_SEQ++ ))
     _AWEN_AI_ACTIVE_SEQ=$_AWEN_AI_SEQ
-
-    local request=$(_awen_build_request "$BUFFER" "$CURSOR" false "$nl_mode")
     local socket="$_AWEN_SOCKET"
     local seq=$_AWEN_AI_SEQ
     local result_file="$_AWEN_AI_RESULT_FILE"
@@ -655,9 +677,12 @@ _awen_check_ai_result() {
     if [[ "$BUFFER" == "# "* ]]; then
         local nl_cmd=""
         if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-            nl_cmd=$(printf '%s' "$response" | jq -r '.suggestions[0].text // empty' 2>/dev/null)
+            nl_cmd=$(printf '%s' "$response" | jq -r '.command // empty' 2>/dev/null)
         else
-            nl_cmd=$(_awen_extract_json_value "$response" "text")
+            if [[ "$response" == *'"command":"'* ]]; then
+                local _after="${response#*\"command\":\"}"
+                nl_cmd=$(_awen_extract_json_value "$_after")
+            fi
         fi
         if [[ -n "$nl_cmd" ]]; then
             _awen_render_nl_suggestion "$nl_cmd"
