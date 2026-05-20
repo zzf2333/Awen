@@ -1,0 +1,66 @@
+[command]
+name = "claude"
+description = "Claude Code CLI"
+
+[[command.subcommands]]
+name = "chat"
+description = "Start interactive chat"
+
+[[command.subcommands]]
+name = "code"
+description = "Code editing mode"
+
+[[command.flags]]
+name = "--model"
+short = "-m"
+arg = "MODEL"
+description = "Select model"
+
+[[command.flags]]
+name = "--system"
+arg = "PROMPT"
+description = "System prompt"
+
+[[command.flags]]
+name = "--output-format"
+arg = "FORMAT"
+description = "Output format"
+
+[[command.flags]]
+name = "--max-turns"
+arg = "NUM"
+description = "Max conversation turns"
+
+[[command.flags]]
+name = "--verbose"
+short = "-v"
+description = "Verbose output"
+
+[[command.flags]]
+name = "--version"
+description = "Show version"
+
+[[command.flags]]
+name = "--help"
+short = "-h"
+description = "Show help"
+
+[[command.flags]]
+name = "-p"
+arg = "PROMPT"
+description = "Initial prompt"
+
+[[command.flags]]
+name = "--allowedTools"
+arg = "TOOLS"
+description = "Allowed tools"
+
+[[command.flags]]
+name = "--resume"
+short = "-r"
+description = "Resume last conversation"
+
+[[command.flags]]
+name = "--continue"
+short = "-c"
+description = "Continue conversation"

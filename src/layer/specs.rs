@@ -89,6 +89,8 @@ impl SpecsLayer {
             "systemctl", "journalctl", "htop",
             // Terminal multiplexers
             "tmux", "screen",
+            // Database CLIs
+            "psql", "mysql", "redis-cli", "mongosh", "sqlite3",
         ];
 
         for (name, content) in builtin {
