@@ -68,6 +68,14 @@ impl SpecsLayer {
         let builtin = builtin_specs![
             // VCS & dev ecosystem
             "git", "docker", "npm", "cargo", "brew", "curl", "ssh",
+            // Cloud & infrastructure
+            "gh", "kubectl", "terraform",
+            // Languages & runtimes
+            "python", "go", "node",
+            // Package managers & build tools
+            "pip", "cmake", "make",
+            // AI tools
+            "claude",
             // Linux core - file operations
             "ls", "rm", "cp", "mv", "mkdir", "touch", "ln", "chmod", "chown",
             // Linux text processing & utilities
@@ -75,6 +83,12 @@ impl SpecsLayer {
             "wc", "diff", "cut", "tr", "tee", "xargs",
             // Linux core - search, archive, process, disk
             "find", "tar", "ps", "kill", "df", "du", "lsof",
+            // Networking & diagnostics
+            "ping", "dig", "wget", "ss", "nmap",
+            // System administration
+            "systemctl", "journalctl", "htop",
+            // Terminal multiplexers
+            "tmux", "screen",
         ];
 
         for (name, content) in builtin {
