@@ -20,8 +20,6 @@ pub struct SuggestRequest {
     pub timestamp: Option<i64>,
     #[serde(default)]
     pub skip_ai: bool,
-    #[serde(default)]
-    pub nl_mode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,7 +169,6 @@ mod tests {
             },
             timestamp: Some(1716100000),
             skip_ai: false,
-            nl_mode: false,
         });
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Request = serde_json::from_str(&json).unwrap();
@@ -202,7 +199,6 @@ mod tests {
             },
             timestamp: None,
             skip_ai: true,
-            nl_mode: false,
         });
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"skip_ai\":true"));

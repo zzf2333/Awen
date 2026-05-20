@@ -283,7 +283,6 @@ async fn test_suggest_specs_completion() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -346,7 +345,6 @@ async fn test_suggest_history_after_record() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -393,7 +391,6 @@ async fn test_suggest_failure_recovery() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -444,7 +441,6 @@ async fn test_suggest_risk_warning() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -487,7 +483,6 @@ async fn test_suggest_no_warning_for_safe_command() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -593,7 +588,6 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -627,7 +621,6 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -663,7 +656,6 @@ async fn test_full_session_flow() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
     let resp = daemon.send(&req).await;
     match &resp {
@@ -770,7 +762,6 @@ async fn test_suggest_with_sensitive_context() {
             },
             timestamp: None,
             skip_ai: false,
-            nl_mode: false,
         }))
         .await;
 
@@ -812,7 +803,6 @@ async fn test_risk_warning_with_suggestions_coexist() {
             },
             timestamp: None,
             skip_ai: false,
-            nl_mode: false,
         }))
         .await;
 
@@ -859,7 +849,6 @@ async fn test_ai_disabled_local_suggestions_work() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -913,7 +902,6 @@ async fn test_ai_timeout_returns_local_suggestions() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let start = std::time::Instant::now();
@@ -986,7 +974,6 @@ async fn test_ai_suggestion_merged_into_response() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1042,7 +1029,6 @@ async fn test_ai_debounce_skips_second_request() {
             },
             timestamp: None,
             skip_ai: false,
-            nl_mode: false,
         })
     };
 
@@ -1116,7 +1102,6 @@ async fn test_skip_ai_returns_local_only() {
         },
         timestamp: None,
         skip_ai: true,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1167,7 +1152,6 @@ async fn test_skip_ai_fast_response_with_slow_provider() {
         },
         timestamp: None,
         skip_ai: true,
-        nl_mode: false,
     });
 
     let start = std::time::Instant::now();
@@ -1222,7 +1206,6 @@ async fn test_skip_ai_false_still_calls_ai() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1276,7 +1259,6 @@ async fn test_skip_ai_false_risk_warning_still_skips_ai() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1340,7 +1322,6 @@ async fn test_skip_ai_false_high_confidence_local_skips_ai() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1414,7 +1395,6 @@ async fn test_ai_not_called_when_local_sufficient() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1469,7 +1449,6 @@ async fn test_ai_called_when_local_insufficient() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1518,7 +1497,6 @@ async fn test_ai_error_recovery_when_failure_unmatched() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1570,7 +1548,6 @@ async fn test_ai_not_called_when_local_failure_pattern_matches() {
         },
         timestamp: None,
         skip_ai: false,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1621,7 +1598,6 @@ async fn test_need_ai_signal_in_phase1_response() {
         },
         timestamp: None,
         skip_ai: true,
-        nl_mode: false,
     });
 
     let resp = daemon.send(&req).await;
@@ -1652,7 +1628,6 @@ async fn test_need_ai_signal_in_phase1_response() {
         },
         timestamp: None,
         skip_ai: true,
-        nl_mode: false,
     });
 
     let resp2 = daemon.send(&req2).await;
@@ -1771,43 +1746,6 @@ async fn test_nl_generate_with_ai_provider() {
             assert!(provider.calls() > 0, "AI provider should have been called");
         }
         other => panic!("expected NlGenerate response, got: {other:?}"),
-    }
-
-    daemon.shutdown().await;
-}
-
-#[tokio::test]
-async fn test_legacy_suggest_with_nl_mode_compat() {
-    let daemon = TestDaemon::start().await;
-
-    let resp = daemon
-        .send(&Request::Suggest(SuggestRequest {
-            input: "# list files".into(),
-            cursor_pos: 12,
-            context: RequestContext {
-                cwd: "/tmp".into(),
-                last_command: None,
-                last_exit_code: None,
-                last_stderr: None,
-                git_branch: None,
-                git_status: None,
-                session_commands: vec![],
-                env_hints: vec![],
-            },
-            timestamp: None,
-            skip_ai: false,
-            nl_mode: true,
-        }))
-        .await;
-
-    match resp {
-        Response::NlGenerate(r) => {
-            assert!(
-                r.command.is_none(),
-                "no AI provider, compat path should return NlGenerate with None"
-            );
-        }
-        other => panic!("expected NlGenerate response from legacy compat path, got: {other:?}"),
     }
 
     daemon.shutdown().await;
