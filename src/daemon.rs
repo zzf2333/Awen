@@ -233,6 +233,7 @@ async fn process_request(
 ) -> Response {
     match request {
         Request::Suggest(req) => handle_suggest(req, state).await,
+        Request::NlGenerate(req) => handle_nl_generate(req, state).await,
         Request::Record(req) => handle_record(req, state).await,
         Request::Status => handle_status(state).await,
         Request::Context => handle_context(state).await,
@@ -244,8 +245,19 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
+    // Backward compatibility: old plugin sends nl_mode=true via Suggest
     if req.nl_mode {
-        return handle_nl_suggest(req, state).await;
+        let nl_req = NlGenerateRequest {
+            query: req
+                .input
+                .strip_prefix('#')
+                .unwrap_or(&req.input)
+                .trim()
+                .to_string(),
+            context: req.context,
+            timestamp: req.timestamp,
+        };
+        return handle_nl_generate(nl_req, state).await;
     }
 
     if req.input.is_empty() {
@@ -392,40 +404,41 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
     Response::Suggest(response)
 }
 
-async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let (ai_provider, max_tokens, timeout_ms, stderr_max_chars) = {
+async fn handle_nl_generate(
+    req: NlGenerateRequest,
+    state: &Arc<Mutex<DaemonState>>,
+) -> Response {
+    let (ai_provider, max_tokens, timeout_ms, stderr_max_chars, risk_enabled) = {
         let state = state.lock().await;
         (
             state.ai_provider.clone(),
             state.config.ai.max_tokens.max(200),
             state.config.ai.timeout_ms,
             state.config.context.stderr_max_chars,
+            state.config.ui.risk_detection,
         )
     };
 
     let Some(provider) = ai_provider else {
-        return Response::Suggest(SuggestResponse {
-            suggestions: vec![],
-            hint: None,
+        return Response::NlGenerate(NlGenerateResponse {
+            command: None,
+            explanation: None,
             warning: None,
         });
     };
 
-    let nl_query = req.input.strip_prefix('#').unwrap_or(&req.input).trim();
-    if nl_query.is_empty() {
-        return Response::Suggest(SuggestResponse {
-            suggestions: vec![],
-            hint: None,
+    if req.query.is_empty() {
+        return Response::NlGenerate(NlGenerateResponse {
+            command: None,
+            explanation: None,
             warning: None,
         });
     }
 
     let mut ctx = req.context.clone();
     crate::sanitize::sanitize_request_context(&mut ctx, stderr_max_chars);
-    let prompt = ai::build_nl_prompt(nl_query, &ctx);
-    tracing::info!("NL generation started, query_len={}", nl_query.len());
-
-    let mut suggestions = Vec::new();
+    let prompt = ai::build_nl_prompt(&req.query, &ctx);
+    tracing::info!("NL generation started, query_len={}", req.query.len());
 
     let ai_start = std::time::Instant::now();
     match tokio::time::timeout(
@@ -442,7 +455,19 @@ async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>)
             );
             if let Some(suggestion) = ai::parse_nl_suggestion(&ai_response) {
                 tracing::info!("NL suggestion accepted, len={}", suggestion.text.len());
-                suggestions.push(suggestion);
+
+                let warning = if risk_enabled {
+                    let state = state.lock().await;
+                    state.risk.check(&suggestion.text)
+                } else {
+                    None
+                };
+
+                return Response::NlGenerate(NlGenerateResponse {
+                    command: Some(suggestion.text),
+                    explanation: None,
+                    warning,
+                });
             }
         }
         Ok(Err(e)) => {
@@ -456,9 +481,9 @@ async fn handle_nl_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>)
         }
     }
 
-    Response::Suggest(SuggestResponse {
-        suggestions,
-        hint: None,
+    Response::NlGenerate(NlGenerateResponse {
+        command: None,
+        explanation: None,
         warning: None,
     })
 }

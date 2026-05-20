@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Request {
     Suggest(SuggestRequest),
+    NlGenerate(NlGenerateRequest),
     Record(RecordCommandRequest),
     Status,
     Context,
@@ -21,6 +22,14 @@ pub struct SuggestRequest {
     pub skip_ai: bool,
     #[serde(default)]
     pub nl_mode: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NlGenerateRequest {
+    pub query: String,
+    pub context: RequestContext,
+    #[serde(default)]
+    pub timestamp: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,10 +66,20 @@ pub struct RecordCommandRequest {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
     Suggest(SuggestResponse),
+    NlGenerate(NlGenerateResponse),
     Status(StatusResponse),
     Context(ContextResponse),
     Ok,
     Error { message: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NlGenerateResponse {
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<Warning>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,6 +261,89 @@ mod tests {
             Request::Record(r) => {
                 assert_eq!(r.exit_code, 1);
                 assert_eq!(r.command, "cargo build");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_nl_generate_request_roundtrip() {
+        let req = Request::NlGenerate(NlGenerateRequest {
+            query: "list files in current directory".into(),
+            context: RequestContext {
+                cwd: "/home/user".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: Some("main".into()),
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        });
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"type\":\"nl_generate\""));
+        let parsed: Request = serde_json::from_str(&json).unwrap();
+        match parsed {
+            Request::NlGenerate(r) => {
+                assert_eq!(r.query, "list files in current directory");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_nl_generate_response_roundtrip() {
+        let resp = Response::NlGenerate(NlGenerateResponse {
+            command: Some("ls -la".into()),
+            explanation: None,
+            warning: None,
+        });
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"type\":\"nl_generate\""));
+        let parsed: Response = serde_json::from_str(&json).unwrap();
+        match parsed {
+            Response::NlGenerate(r) => {
+                assert_eq!(r.command, Some("ls -la".into()));
+                assert!(r.warning.is_none());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_nl_generate_response_with_warning() {
+        let resp = Response::NlGenerate(NlGenerateResponse {
+            command: Some("rm -rf /tmp/old".into()),
+            explanation: None,
+            warning: Some(Warning {
+                text: "Recursive force delete".into(),
+            }),
+        });
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: Response = serde_json::from_str(&json).unwrap();
+        match parsed {
+            Response::NlGenerate(r) => {
+                assert!(r.command.is_some());
+                assert!(r.warning.is_some());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_nl_generate_response_no_command() {
+        let resp = Response::NlGenerate(NlGenerateResponse {
+            command: None,
+            explanation: None,
+            warning: None,
+        });
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: Response = serde_json::from_str(&json).unwrap();
+        match parsed {
+            Response::NlGenerate(r) => {
+                assert!(r.command.is_none());
             }
             _ => panic!("wrong variant"),
         }

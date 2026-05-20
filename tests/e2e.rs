@@ -1369,3 +1369,146 @@ async fn test_skip_ai_false_high_confidence_local_skips_ai() {
 
     daemon.shutdown().await;
 }
+
+// ============================================================
+// NL Generate protocol tests
+// ============================================================
+
+#[tokio::test]
+async fn test_nl_generate_no_ai_returns_none() {
+    let daemon = TestDaemon::start().await;
+
+    let resp = daemon
+        .send(&Request::NlGenerate(NlGenerateRequest {
+            query: "list files in current directory".into(),
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        }))
+        .await;
+
+    match resp {
+        Response::NlGenerate(r) => {
+            assert!(r.command.is_none(), "no AI provider, command should be None");
+            assert!(r.warning.is_none());
+        }
+        other => panic!("expected NlGenerate response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_nl_generate_empty_query_returns_none() {
+    let daemon = TestDaemon::start().await;
+
+    let resp = daemon
+        .send(&Request::NlGenerate(NlGenerateRequest {
+            query: "".into(),
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        }))
+        .await;
+
+    match resp {
+        Response::NlGenerate(r) => {
+            assert!(r.command.is_none(), "empty query should return None");
+        }
+        other => panic!("expected NlGenerate response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_nl_generate_with_ai_provider() {
+    let mut config = test_config();
+    config.ai.enabled = true;
+    config.ai.timeout_ms = 5000;
+
+    let provider = Arc::new(FastMockProvider::new());
+    let daemon = TestDaemon::start_with_ai(config, provider.clone()).await;
+
+    let resp = daemon
+        .send(&Request::NlGenerate(NlGenerateRequest {
+            query: "get all pods across namespaces".into(),
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+        }))
+        .await;
+
+    match resp {
+        Response::NlGenerate(r) => {
+            assert!(r.command.is_some(), "AI provider should produce a command");
+            assert!(provider.calls() > 0, "AI provider should have been called");
+        }
+        other => panic!("expected NlGenerate response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_legacy_suggest_with_nl_mode_compat() {
+    let daemon = TestDaemon::start().await;
+
+    let resp = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "# list files".into(),
+            cursor_pos: 12,
+            context: RequestContext {
+                cwd: "/tmp".into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: false,
+            nl_mode: true,
+        }))
+        .await;
+
+    match resp {
+        Response::NlGenerate(r) => {
+            assert!(
+                r.command.is_none(),
+                "no AI provider, compat path should return NlGenerate with None"
+            );
+        }
+        other => panic!(
+            "expected NlGenerate response from legacy compat path, got: {other:?}"
+        ),
+    }
+
+    daemon.shutdown().await;
+}
