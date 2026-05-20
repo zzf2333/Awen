@@ -528,8 +528,9 @@ _awen_apply_response() {
         _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[1]}"
         _awen_render_menu
     elif [[ $count -ge 1 ]]; then
+        local single_text="${_AWEN_MENU_TEXTS[1]}"
         _awen_menu_reset
-        _awen_render_ghost "${_AWEN_MENU_TEXTS[1]}"
+        _awen_render_ghost "$single_text"
     else
         _awen_menu_reset
         _awen_remove_ghost_highlight
