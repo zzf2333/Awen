@@ -121,7 +121,7 @@ impl SuggestionPipeline {
         req_context: &RequestContext,
     ) -> LocalResult {
         if input.is_empty() {
-            let mut suggestions = layers.history.suggest_next(&req_context.cwd, 5);
+            let mut suggestions = layers.history.suggest_next(&req_context.cwd, req_context.last_command.as_deref(), 5);
 
             let mut hint = None;
             let local_failure_matched = if let Some(exit_code) = req_context.last_exit_code
@@ -154,7 +154,7 @@ impl SuggestionPipeline {
             layers.context.update_cwd(req_context.cwd.clone());
 
             let mut suggestions = Vec::new();
-            suggestions.extend(layers.history.suggest(input, &req_context.cwd, 5));
+            suggestions.extend(layers.history.suggest(input, &req_context.cwd, req_context.last_command.as_deref(), 5));
             suggestions.extend(layers.specs.suggest(input, cursor_pos));
 
             let mut hint = None;

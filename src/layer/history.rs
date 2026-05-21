@@ -58,7 +58,7 @@ impl HistoryLayer {
         Ok(())
     }
 
-    pub fn suggest(&self, input: &str, cwd: &str, limit: usize) -> Vec<Suggestion> {
+    pub fn suggest(&self, input: &str, cwd: &str, last_command: Option<&str>, limit: usize) -> Vec<Suggestion> {
         if input.is_empty() {
             return Vec::new();
         }
@@ -97,7 +97,7 @@ impl HistoryLayer {
 
         let input_lower = input.to_lowercase();
         let short_input = input.len() <= 3;
-        let min_score: u32 = if short_input { 80 } else { 40 };
+        let min_score: u32 = if short_input { 50 } else { 40 };
         let input_first_word = input_lower.split_whitespace().next().unwrap_or("");
         let has_space = input.contains(' ');
 
@@ -124,13 +124,15 @@ impl HistoryLayer {
                 let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
                 let prefix_bonus = if command.starts_with(input) { 3.0 } else { 1.0 };
                 let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
+                let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { 0.1 } else { 1.0 };
 
                 let score = match_score as f64
                     * recency_decay
                     * frequency_boost
                     * dir_affinity
                     * prefix_bonus
-                    * failure_penalty;
+                    * failure_penalty
+                    * last_cmd_penalty;
                 scored.push((score, command.clone()));
             }
         }
@@ -152,7 +154,7 @@ impl HistoryLayer {
             .collect()
     }
 
-    pub fn suggest_next(&self, cwd: &str, limit: usize) -> Vec<Suggestion> {
+    pub fn suggest_next(&self, cwd: &str, last_command: Option<&str>, limit: usize) -> Vec<Suggestion> {
         let conn = match Connection::open(&self.db_path) {
             Ok(c) => c,
             Err(_) => return Vec::new(),
@@ -188,8 +190,9 @@ impl HistoryLayer {
             let frequency = (*count as f64).ln().max(1.0);
             let dir_affinity = if cmd_cwd == cwd { 3.0 } else { 1.0 };
             let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
+            let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { 0.1 } else { 1.0 };
 
-            let score = recency * frequency * dir_affinity * failure_penalty;
+            let score = recency * frequency * dir_affinity * failure_penalty * last_cmd_penalty;
             scored.push((score, command.clone()));
         }
 
@@ -257,7 +260,7 @@ mod tests {
             .unwrap();
         layer.record("npm install", "/app", 0).unwrap();
 
-        let results = layer.suggest("docker", "/app", 5);
+        let results = layer.suggest("docker", "/app", None, 5);
         assert!(!results.is_empty());
         assert!(
             results
@@ -270,7 +273,7 @@ mod tests {
     fn test_suggest_empty_input() {
         let (_dir, layer) = setup();
         layer.record("ls", "/tmp", 0).unwrap();
-        let results = layer.suggest("", "/tmp", 5);
+        let results = layer.suggest("", "/tmp", None, 5);
         assert!(results.is_empty());
     }
 
@@ -280,7 +283,7 @@ mod tests {
         layer.record("make build", "/project-a", 0).unwrap();
         layer.record("make test", "/project-b", 0).unwrap();
 
-        let results = layer.suggest("make", "/project-a", 5);
+        let results = layer.suggest("make", "/project-a", None, 5);
         assert!(!results.is_empty());
     }
 
@@ -326,7 +329,7 @@ mod tests {
         layer.record("cargo test", "/project", 0).unwrap();
         layer.record("ls -la", "/other", 0).unwrap();
 
-        let results = layer.suggest_next("/project", 5);
+        let results = layer.suggest_next("/project", None, 5);
         assert!(!results.is_empty());
         assert!(
             results
@@ -342,7 +345,7 @@ mod tests {
         layer.record("make build", "/project-a", 0).unwrap();
         layer.record("npm test", "/project-b", 0).unwrap();
 
-        let results = layer.suggest_next("/project-a", 5);
+        let results = layer.suggest_next("/project-a", None, 5);
         assert!(!results.is_empty());
         assert_eq!(results[0].text, "make build");
     }
@@ -350,7 +353,7 @@ mod tests {
     #[test]
     fn test_suggest_next_empty_db() {
         let (_dir, layer) = setup();
-        let results = layer.suggest_next("/tmp", 5);
+        let results = layer.suggest_next("/tmp", None, 5);
         assert!(results.is_empty());
     }
 
@@ -364,7 +367,7 @@ mod tests {
             .unwrap();
         layer.record("echo git add something", "/app", 0).unwrap();
 
-        let results = layer.suggest("git a", "/app", 10);
+        let results = layer.suggest("git a", "/app", None, 10);
         for s in &results {
             assert!(
                 s.text.starts_with("git"),
