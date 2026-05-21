@@ -3,12 +3,40 @@ name = "claude"
 description = "Claude Code CLI"
 
 [[command.subcommands]]
-name = "chat"
-description = "Start interactive chat"
+name = "config"
+description = "Manage configuration"
+[[command.subcommands.subcommands]]
+name = "set"
+description = "Set a config value"
+[[command.subcommands.subcommands]]
+name = "get"
+description = "Get a config value"
+[[command.subcommands.subcommands]]
+name = "list"
+description = "List all config values"
+[[command.subcommands.subcommands]]
+name = "show"
+description = "Show current config"
 
 [[command.subcommands]]
-name = "code"
-description = "Code editing mode"
+name = "mcp"
+description = "Manage MCP servers"
+[[command.subcommands.subcommands]]
+name = "serve"
+description = "Start MCP server"
+[[command.subcommands.subcommands]]
+name = "add"
+description = "Add MCP server"
+[[command.subcommands.subcommands]]
+name = "remove"
+description = "Remove MCP server"
+[[command.subcommands.subcommands]]
+name = "list"
+description = "List MCP servers"
+
+[[command.subcommands]]
+name = "api"
+description = "Send API requests directly"
 
 [[command.flags]]
 name = "--model"
@@ -17,43 +45,49 @@ arg = "MODEL"
 description = "Select model"
 
 [[command.flags]]
-name = "--system"
-arg = "PROMPT"
-description = "System prompt"
+name = "--permission-mode"
+arg = "MODE"
+description = "Permission prompt mode"
 
 [[command.flags]]
 name = "--output-format"
 arg = "FORMAT"
-description = "Output format"
+description = "Output format (text, json, stream-json)"
+
+[[command.flags]]
+name = "--input-format"
+arg = "FORMAT"
+description = "Input format"
 
 [[command.flags]]
 name = "--max-turns"
 arg = "NUM"
-description = "Max conversation turns"
+description = "Max agentic turns"
 
 [[command.flags]]
-name = "--verbose"
-short = "-v"
-description = "Verbose output"
-
-[[command.flags]]
-name = "--version"
-description = "Show version"
-
-[[command.flags]]
-name = "--help"
-short = "-h"
-description = "Show help"
-
-[[command.flags]]
-name = "-p"
+name = "--system-prompt"
 arg = "PROMPT"
-description = "Initial prompt"
+description = "System prompt override"
+
+[[command.flags]]
+name = "--append-system-prompt"
+arg = "PROMPT"
+description = "Append to system prompt"
 
 [[command.flags]]
 name = "--allowedTools"
 arg = "TOOLS"
-description = "Allowed tools"
+description = "Comma-separated tool allowlist"
+
+[[command.flags]]
+name = "--disallowedTools"
+arg = "TOOLS"
+description = "Comma-separated tool denylist"
+
+[[command.flags]]
+name = "--mcp-config"
+arg = "FILE"
+description = "MCP server config file"
 
 [[command.flags]]
 name = "--resume"
@@ -64,3 +98,26 @@ description = "Resume last conversation"
 name = "--continue"
 short = "-c"
 description = "Continue conversation"
+
+[[command.flags]]
+name = "-p"
+arg = "PROMPT"
+description = "Initial prompt (non-interactive)"
+
+[[command.flags]]
+name = "--verbose"
+short = "-v"
+description = "Verbose output"
+
+[[command.flags]]
+name = "--no-markdown"
+description = "Disable markdown rendering"
+
+[[command.flags]]
+name = "--version"
+description = "Show version"
+
+[[command.flags]]
+name = "--help"
+short = "-h"
+description = "Show help"

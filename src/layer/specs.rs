@@ -88,6 +88,9 @@ impl SpecsLayer {
             "make",
             // AI tools
             "claude",
+            "codex",
+            "opencode",
+            "antigravity",
             // Linux core - file operations
             "ls",
             "rm",
