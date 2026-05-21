@@ -5,7 +5,7 @@ use crate::layer::failure::FailureLayer;
 use crate::layer::history::HistoryLayer;
 use crate::layer::risk::RiskLayer;
 use crate::layer::specs::SpecsLayer;
-use crate::pipeline::{AiDecision, AiParams, AiTriggerPolicy, LocalResult, SuggestionPipeline};
+use crate::pipeline::{AiDecision, AiParams, AiTriggerPolicy, Layers, SuggestionPipeline};
 use crate::protocol::*;
 
 use std::sync::Arc;
@@ -223,71 +223,17 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
     let (local, ai_params, decision) = {
         let mut st = state.lock().await;
 
-        let (response, local_failure_matched, has_failure_context) = if req.input.is_empty() {
-            let mut suggestions = st.history.suggest_next(&req.context.cwd, 5);
-
-            let mut hint = None;
-            let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
-                && exit_code != 0
-                && let Some(stderr) = &req.context.last_stderr
-                && let Some((fail_suggestion, fail_hint)) =
-                    st.failure.match_failure(stderr, exit_code)
-            {
-                suggestions.insert(0, fail_suggestion);
-                hint = Some(fail_hint);
-                true
-            } else {
-                false
+        let local = {
+            let st_ref = &mut *st;
+            let mut layers = Layers {
+                history: &st_ref.history,
+                specs: &st_ref.specs,
+                failure: &st_ref.failure,
+                risk: &st_ref.risk,
+                context: &mut st_ref.context,
+                risk_enabled: st_ref.config.ui.risk_detection,
             };
-
-            let has_failure_context = req.context.last_exit_code.is_some_and(|c| c != 0)
-                && req.context.last_stderr.is_some();
-
-            let response = SuggestResponse {
-                suggestions,
-                hint,
-                warning: None,
-                need_ai: false,
-            };
-            (response, local_failure_matched, has_failure_context)
-        } else {
-            st.context.update_cwd(req.context.cwd.clone());
-
-            let mut suggestions = Vec::new();
-            suggestions.extend(st.history.suggest(&req.input, &req.context.cwd, 5));
-            suggestions.extend(st.specs.suggest(&req.input, req.cursor_pos));
-
-            let mut hint = None;
-            let local_failure_matched = if let Some(exit_code) = req.context.last_exit_code
-                && exit_code != 0
-                && let Some(stderr) = &req.context.last_stderr
-                && let Some((fail_suggestion, fail_hint)) =
-                    st.failure.match_failure(stderr, exit_code)
-            {
-                suggestions.push(fail_suggestion);
-                hint = Some(fail_hint);
-                true
-            } else {
-                false
-            };
-
-            let has_failure_context = req.context.last_exit_code.is_some_and(|c| c != 0)
-                && req.context.last_stderr.is_some();
-
-            let warning = if st.config.ui.risk_detection {
-                st.risk.check(&req.input)
-            } else {
-                None
-            };
-            let response =
-                crate::arbitrator::Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
-            (response, local_failure_matched, has_failure_context)
-        };
-
-        let local = LocalResult {
-            response,
-            has_failure_context,
-            local_failure_matched,
+            SuggestionPipeline::collect_local(&mut layers, &req.input, req.cursor_pos, &req.context)
         };
 
         let ai_params = st.ai_provider.clone().map(|provider| AiParams {

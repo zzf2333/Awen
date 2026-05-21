@@ -3,8 +3,22 @@ use std::time::Instant;
 
 use crate::arbitrator::Arbitrator;
 use crate::config::AiConfig;
+use crate::context::ContextEngine;
 use crate::layer::ai::{self, AiProvider};
+use crate::layer::failure::FailureLayer;
+use crate::layer::history::HistoryLayer;
+use crate::layer::risk::RiskLayer;
+use crate::layer::specs::SpecsLayer;
 use crate::protocol::{RequestContext, SuggestResponse, Suggestion};
+
+pub struct Layers<'a> {
+    pub history: &'a HistoryLayer,
+    pub specs: &'a SpecsLayer,
+    pub failure: &'a FailureLayer,
+    pub risk: &'a RiskLayer,
+    pub context: &'a mut ContextEngine,
+    pub risk_enabled: bool,
+}
 
 pub struct LocalResult {
     pub response: SuggestResponse,
@@ -100,6 +114,81 @@ enum AiTask<'a> {
 pub struct SuggestionPipeline;
 
 impl SuggestionPipeline {
+    pub fn collect_local(
+        layers: &mut Layers<'_>,
+        input: &str,
+        cursor_pos: usize,
+        req_context: &RequestContext,
+    ) -> LocalResult {
+        if input.is_empty() {
+            let mut suggestions = layers.history.suggest_next(&req_context.cwd, 5);
+
+            let mut hint = None;
+            let local_failure_matched = if let Some(exit_code) = req_context.last_exit_code
+                && exit_code != 0
+                && let Some(stderr) = &req_context.last_stderr
+                && let Some((fail_suggestion, fail_hint)) =
+                    layers.failure.match_failure(stderr, exit_code)
+            {
+                suggestions.insert(0, fail_suggestion);
+                hint = Some(fail_hint);
+                true
+            } else {
+                false
+            };
+
+            let has_failure_context = req_context.last_exit_code.is_some_and(|c| c != 0)
+                && req_context.last_stderr.is_some();
+
+            LocalResult {
+                response: SuggestResponse {
+                    suggestions,
+                    hint,
+                    warning: None,
+                    need_ai: false,
+                },
+                has_failure_context,
+                local_failure_matched,
+            }
+        } else {
+            layers.context.update_cwd(req_context.cwd.clone());
+
+            let mut suggestions = Vec::new();
+            suggestions.extend(layers.history.suggest(input, &req_context.cwd, 5));
+            suggestions.extend(layers.specs.suggest(input, cursor_pos));
+
+            let mut hint = None;
+            let local_failure_matched = if let Some(exit_code) = req_context.last_exit_code
+                && exit_code != 0
+                && let Some(stderr) = &req_context.last_stderr
+                && let Some((fail_suggestion, fail_hint)) =
+                    layers.failure.match_failure(stderr, exit_code)
+            {
+                suggestions.push(fail_suggestion);
+                hint = Some(fail_hint);
+                true
+            } else {
+                false
+            };
+
+            let has_failure_context = req_context.last_exit_code.is_some_and(|c| c != 0)
+                && req_context.last_stderr.is_some();
+
+            let warning = if layers.risk_enabled {
+                layers.risk.check(input)
+            } else {
+                None
+            };
+
+            let response = Arbitrator::arbitrate(suggestions, req_context, hint, warning);
+            LocalResult {
+                response,
+                has_failure_context,
+                local_failure_matched,
+            }
+        }
+    }
+
     pub async fn execute(
         mut local: LocalResult,
         decision: AiDecision,
