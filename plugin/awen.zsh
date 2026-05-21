@@ -14,7 +14,6 @@ typeset -g _AWEN_GHOST_STYLE="fg=242"
 # Async AI state
 typeset -g _AWEN_AI_PID=""
 typeset -g _AWEN_AI_SNAPSHOT=""
-typeset -g _AWEN_AI_PENDING=""
 typeset -g _AWEN_AI_SEQ=0
 typeset -g _AWEN_AI_ACTIVE_SEQ=0
 typeset -g _AWEN_NEED_AI=""
@@ -629,7 +628,6 @@ _awen_cancel_pending_ai() {
         kill "$_AWEN_AI_PID" 2>/dev/null
         _AWEN_AI_PID=""
     fi
-    _AWEN_AI_PENDING=""
 }
 
 # Phase 2: Schedule async AI request after AWEN_AI_DELAY
@@ -710,47 +708,6 @@ _awen_check_ai_result() {
 
     _awen_apply_response "$response"
 
-    if [[ -n "$prev_selected" ]] && (( _AWEN_MENU_ACTIVE )); then
-        local i
-        for (( i=1; i<=${#_AWEN_MENU_TEXTS[@]}; i++ )); do
-            if [[ "${_AWEN_MENU_TEXTS[$i]}" == "$prev_selected" ]]; then
-                _AWEN_MENU_INDEX=$i
-                _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[$i]}"
-                _awen_render_menu
-                break
-            fi
-        done
-    fi
-
-    zle -R
-}
-
-# Widget: apply stashed AI response (kept for compatibility)
-_awen_apply_ai() {
-    [[ -z "$_AWEN_AI_PENDING" ]] && return
-    local response="$_AWEN_AI_PENDING"
-    _AWEN_AI_PENDING=""
-
-    # Restore BUFFER from snapshot (empty after zle -F dispatch)
-    if [[ -z "$BUFFER" && -n "$_AWEN_AI_SNAPSHOT" ]]; then
-        BUFFER="$_AWEN_AI_SNAPSHOT"
-        CURSOR=${#BUFFER}
-    fi
-
-    # Abort if user has changed input since AI request was sent
-    if [[ -n "$_AWEN_AI_SNAPSHOT" && "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]]; then
-        return
-    fi
-
-    # Remember current selection to preserve across refresh
-    local prev_selected=""
-    if (( _AWEN_MENU_ACTIVE )); then
-        prev_selected="${_AWEN_MENU_TEXTS[$_AWEN_MENU_INDEX]}"
-    fi
-
-    _awen_apply_response "$response"
-
-    # Restore selection if same item still exists
     if [[ -n "$prev_selected" ]] && (( _AWEN_MENU_ACTIVE )); then
         local i
         for (( i=1; i<=${#_AWEN_MENU_TEXTS[@]}; i++ )); do
@@ -1073,7 +1030,6 @@ awen_init() {
     zle -N _awen_accept_word
     zle -N _awen_dismiss
     zle -N _awen_suggest_local
-    zle -N _awen_apply_ai
     zle -N _awen_menu_up
     zle -N _awen_menu_down
     zle -N _awen_menu_accept
