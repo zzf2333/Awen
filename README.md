@@ -41,7 +41,27 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 
 ## Install
 
-**Prerequisites:** Rust 1.85+, zsh, jq, socat
+### Homebrew (macOS / Linux)
+
+```bash
+brew install zzf2333/tap/awen
+```
+
+Then add to your `~/.zshrc`:
+
+```bash
+source $(brew --prefix)/share/awen/awen.zsh
+```
+
+### Shell Script
+
+```bash
+curl -sSL https://raw.githubusercontent.com/zzf2333/Awen/main/install-remote.sh | sh
+```
+
+### Build from Source
+
+**Prerequisites:** Rust 1.85+, zsh
 
 ```bash
 git clone https://github.com/zzf2333/Awen.git
@@ -49,9 +69,11 @@ cd Awen
 ./install.sh
 ```
 
-This builds the binary, installs it to `~/.local/bin/awen`, copies the zsh plugin and 77 command specs to `~/.config/awen/`, creates a default config, and wires everything into your `.zshrc`. On first launch, your zsh history is auto-imported.
+---
 
-Restart your shell and you're done.
+Restart your shell. Awen starts automatically and imports your zsh history on first launch.
+
+**Optional:** Install `jq` and `socat` for best performance (`brew install jq socat`).
 
 ## Usage
 
