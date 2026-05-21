@@ -3,8 +3,7 @@ name = "tee"
 description = "Read stdin, write to files"
 
 [[command.flags]]
-name = "--append"
-short = "-a"
+name = "-a"
 description = "Append instead of overwrite"
 
 [[command.flags]]

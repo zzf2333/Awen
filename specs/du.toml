@@ -19,6 +19,7 @@ description = "Max display depth"
 name = "--max-depth"
 arg = "NUM"
 description = "Max directory depth"
+os = "linux"
 
 [[command.flags]]
 name = "-a"
@@ -32,6 +33,7 @@ description = "Show grand total"
 name = "--exclude"
 arg = "PATTERN"
 description = "Exclude matching files"
+os = "linux"
 
 [[command.flags]]
 name = "-L"

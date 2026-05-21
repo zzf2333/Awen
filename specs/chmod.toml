@@ -3,16 +3,15 @@ name = "chmod"
 description = "Change file permissions"
 
 [[command.flags]]
-name = "--recursive"
-short = "-R"
+name = "-R"
 description = "Change files recursively"
 
 [[command.flags]]
-name = "--verbose"
-short = "-v"
+name = "-v"
 description = "Output for every file processed"
 
 [[command.flags]]
 name = "--changes"
 short = "-c"
 description = "Report only when changes made"
+os = "linux"

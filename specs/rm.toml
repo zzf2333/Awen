@@ -3,26 +3,23 @@ name = "rm"
 description = "Remove files or directories"
 
 [[command.flags]]
-name = "--recursive"
-short = "-r"
+name = "-r"
 description = "Remove directories recursively"
 
 [[command.flags]]
-name = "--force"
-short = "-f"
+name = "-f"
 description = "Force removal without prompt"
 
 [[command.flags]]
-name = "--interactive"
-short = "-i"
+name = "-i"
 description = "Prompt before each removal"
 
 [[command.flags]]
 name = "--verbose"
 short = "-v"
 description = "Explain what is being done"
+os = "linux"
 
 [[command.flags]]
-name = "--dir"
-short = "-d"
+name = "-d"
 description = "Remove empty directories"

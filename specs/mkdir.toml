@@ -3,17 +3,14 @@ name = "mkdir"
 description = "Create directories"
 
 [[command.flags]]
-name = "--parents"
-short = "-p"
+name = "-p"
 description = "Create parent directories"
 
 [[command.flags]]
-name = "--verbose"
-short = "-v"
+name = "-v"
 description = "Print each created directory"
 
 [[command.flags]]
-name = "--mode"
-short = "-m"
+name = "-m"
 arg = "MODE"
 description = "Set permission mode"

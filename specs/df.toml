@@ -26,3 +26,4 @@ description = "Filter by filesystem type"
 [[command.flags]]
 name = "--total"
 description = "Show grand total"
+os = "linux"

@@ -3,44 +3,39 @@ name = "diff"
 description = "Compare files line by line"
 
 [[command.flags]]
-name = "--unified"
-short = "-u"
+name = "-u"
 description = "Output unified diff format"
 
 [[command.flags]]
-name = "--recursive"
-short = "-r"
+name = "-r"
 description = "Recursively compare directories"
 
 [[command.flags]]
-name = "--brief"
-short = "-q"
+name = "-q"
 description = "Report only when files differ"
 
 [[command.flags]]
-name = "--side-by-side"
-short = "-y"
+name = "-y"
 description = "Side-by-side output"
 
 [[command.flags]]
 name = "--color"
 description = "Colorize output"
+os = "linux"
 
 [[command.flags]]
-name = "--ignore-case"
-short = "-i"
+name = "-i"
 description = "Ignore case differences"
 
 [[command.flags]]
-name = "--ignore-all-space"
-short = "-w"
+name = "-w"
 description = "Ignore all whitespace"
 
 [[command.flags]]
-name = "--ignore-blank-lines"
-short = "-B"
+name = "-B"
 description = "Ignore blank line changes"
 
 [[command.flags]]
 name = "--stat"
 description = "Show diffstat summary"
+os = "linux"

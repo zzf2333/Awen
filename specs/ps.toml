@@ -24,6 +24,7 @@ description = "Select by user"
 name = "--sort"
 arg = "KEY"
 description = "Sort output by key"
+os = "linux"
 
 [[command.flags]]
 name = "-o"
@@ -41,3 +42,4 @@ description = "Include no-tty processes"
 [[command.flags]]
 name = "--forest"
 description = "Show process tree"
+os = "linux"

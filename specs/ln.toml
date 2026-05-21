@@ -3,26 +3,23 @@ name = "ln"
 description = "Create links between files"
 
 [[command.flags]]
-name = "--symbolic"
-short = "-s"
+name = "-s"
 description = "Create symbolic link"
 
 [[command.flags]]
-name = "--force"
-short = "-f"
+name = "-f"
 description = "Remove existing destination"
 
 [[command.flags]]
-name = "--verbose"
-short = "-v"
+name = "-v"
 description = "Explain what is being done"
 
 [[command.flags]]
 name = "--relative"
 short = "-r"
 description = "Create relative symbolic link"
+os = "linux"
 
 [[command.flags]]
-name = "--no-dereference"
-short = "-n"
+name = "-n"
 description = "Do not dereference symlinks"

@@ -39,6 +39,8 @@ pub struct FlagSpec {
     pub arg: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub os: Option<String>,
 }
 
 pub struct SpecsLayer {
@@ -243,6 +245,12 @@ impl SpecsLayer {
         }
 
         for flag in target_flags {
+            if let Some(ref os) = flag.os
+                && os != std::env::consts::OS
+            {
+                continue;
+            }
+
             if flag.name.starts_with(partial)
                 || partial.is_empty()
                 || partial == "-"
@@ -383,12 +391,14 @@ description = "verbose output"
                             short: Some("-m".into()),
                             arg: Some("MSG".into()),
                             description: Some("Commit message".into()),
+                            os: None,
                         },
                         FlagSpec {
                             name: "--amend".into(),
                             short: None,
                             arg: None,
                             description: Some("Amend previous commit".into()),
+                            os: None,
                         },
                     ],
                     subcommands: vec![],
@@ -414,5 +424,71 @@ description = "verbose output"
         let layer = SpecsLayer::new();
         let results = layer.suggest("", 0);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_os_field_deserialization() {
+        let toml_str = r#"
+[command]
+name = "test"
+
+[[command.flags]]
+name = "--total"
+description = "grand total"
+os = "linux"
+
+[[command.flags]]
+name = "-h"
+description = "human sizes"
+"#;
+        let spec: SpecFile = toml::from_str(toml_str).unwrap();
+        assert_eq!(spec.command.flags[0].os, Some("linux".into()));
+        assert_eq!(spec.command.flags[1].os, None);
+    }
+
+    #[test]
+    fn test_os_filter_hides_other_platform_flags() {
+        let mut layer = SpecsLayer::new();
+        let other_os = if std::env::consts::OS == "macos" {
+            "linux"
+        } else {
+            "macos"
+        };
+        layer.specs.insert(
+            "test".into(),
+            CommandSpec {
+                name: "test".into(),
+                description: None,
+                subcommands: vec![],
+                flags: vec![
+                    FlagSpec {
+                        name: "-a".into(),
+                        short: None,
+                        arg: None,
+                        description: Some("universal".into()),
+                        os: None,
+                    },
+                    FlagSpec {
+                        name: "--other-only".into(),
+                        short: None,
+                        arg: None,
+                        description: Some("other os only".into()),
+                        os: Some(other_os.into()),
+                    },
+                    FlagSpec {
+                        name: "--current-os".into(),
+                        short: None,
+                        arg: None,
+                        description: Some("current os".into()),
+                        os: Some(std::env::consts::OS.into()),
+                    },
+                ],
+            },
+        );
+
+        let results = layer.suggest("test ", 5);
+        assert!(results.iter().any(|s| s.text == "-a"));
+        assert!(!results.iter().any(|s| s.text == "--other-only"));
+        assert!(results.iter().any(|s| s.text == "--current-os"));
     }
 }

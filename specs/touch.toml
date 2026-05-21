@@ -16,12 +16,10 @@ arg = "TIMESTAMP"
 description = "Use specific timestamp"
 
 [[command.flags]]
-name = "--reference"
-short = "-r"
+name = "-r"
 arg = "FILE"
 description = "Use reference file's times"
 
 [[command.flags]]
-name = "--no-create"
-short = "-c"
+name = "-c"
 description = "Do not create new files"

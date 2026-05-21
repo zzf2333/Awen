@@ -3,26 +3,25 @@ name = "chown"
 description = "Change file owner and group"
 
 [[command.flags]]
-name = "--recursive"
-short = "-R"
+name = "-R"
 description = "Operate recursively"
 
 [[command.flags]]
-name = "--verbose"
-short = "-v"
+name = "-v"
 description = "Output for every file processed"
 
 [[command.flags]]
-name = "--no-dereference"
-short = "-h"
+name = "-h"
 description = "Affect symbolic links"
 
 [[command.flags]]
 name = "--changes"
 short = "-c"
 description = "Report only when changes made"
+os = "linux"
 
 [[command.flags]]
 name = "--reference"
 arg = "FILE"
 description = "Use reference file's owner"
+os = "linux"

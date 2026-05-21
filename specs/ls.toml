@@ -3,23 +3,19 @@ name = "ls"
 description = "List directory contents"
 
 [[command.flags]]
-name = "--long"
-short = "-l"
+name = "-l"
 description = "Long format"
 
 [[command.flags]]
-name = "--all"
-short = "-a"
+name = "-a"
 description = "Include hidden files"
 
 [[command.flags]]
-name = "--human-readable"
-short = "-h"
+name = "-h"
 description = "Human-readable sizes"
 
 [[command.flags]]
-name = "--recursive"
-short = "-R"
+name = "-R"
 description = "List subdirectories recursively"
 
 [[command.flags]]
@@ -31,8 +27,7 @@ name = "-S"
 description = "Sort by file size"
 
 [[command.flags]]
-name = "--reverse"
-short = "-r"
+name = "-r"
 description = "Reverse sort order"
 
 [[command.flags]]
@@ -45,6 +40,5 @@ name = "-1"
 description = "One entry per line"
 
 [[command.flags]]
-name = "--directory"
-short = "-d"
+name = "-d"
 description = "List directories themselves"

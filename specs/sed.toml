@@ -3,8 +3,7 @@ name = "sed"
 description = "Stream editor for text"
 
 [[command.flags]]
-name = "--in-place"
-short = "-i"
+name = "-i"
 arg = "SUFFIX"
 description = "Edit files in place"
 
@@ -13,8 +12,7 @@ name = "-n"
 description = "Suppress automatic printing"
 
 [[command.flags]]
-name = "--expression"
-short = "-e"
+name = "-e"
 arg = "SCRIPT"
 description = "Add editing command"
 
@@ -23,7 +21,6 @@ name = "-E"
 description = "Use extended regex"
 
 [[command.flags]]
-name = "--file"
-short = "-f"
+name = "-f"
 arg = "FILE"
 description = "Read commands from file"
