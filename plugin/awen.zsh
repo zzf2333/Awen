@@ -237,6 +237,17 @@ _awen_keycap_line() {
     fi
 }
 
+_awen_footer_line() {
+    local width="$1" actions="$2"
+    local logo="Awen"
+    local gap=$(( width - ${#actions} - ${#logo} ))
+    if (( gap < 2 )); then
+        printf '%s' "$actions"
+    else
+        printf '%s%s%s' "$actions" "$(_awen_repeat ' ' "$gap")" "$logo"
+    fi
+}
+
 _awen_reconstruct_full_cmd() {
     local input="$1" suggestion="$2"
     if [[ "$suggestion" == "$input"* ]]; then
@@ -474,9 +485,9 @@ _awen_render_risk_panel() {
     (( content_width < 42 )) && content_width=42
     local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
     local top_line="  ╭${rule}╮"
-    local title_content="$(_awen_pad_right "! risk warning (risk)" "$content_width")"
+    local title_content="$(_awen_pad_right "$(_awen_source_icon risk) risk warning (risk)" "$content_width")"
     local text_content="$(_awen_pad_right "$warning_text" "$content_width")"
-    local foot_content="$(_awen_pad_right "enter confirm   shift+tab ignore   Awen suggests only" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↵ confirm   ⇥ ignore   suggests only")" "$content_width")"
     local bottom_line="  ╰${rule}╯"
     local line
 
@@ -506,7 +517,7 @@ _awen_render_risk_panel() {
     line="  │ ${foot_content} │"
     pd+=$'\n'"${line}"
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
-    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#foot_content} )) $_AWEN_STYLE_RISK")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_RISK")
     (( offset += 1 + ${#line} ))
 
     pd+=$'\n'"${bottom_line}"
@@ -540,10 +551,10 @@ _awen_render_failure_panel() {
     (( content_width < 42 )) && content_width=42
     local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
     local top_line="  ╭${rule}╮"
-    local title_content="$(_awen_pad_right "i command failed" "$content_width")"
+    local title_content="$(_awen_pad_right "$(_awen_source_icon failure) command failed" "$content_width")"
     local hint_content="$(_awen_pad_right "$display_hint" "$content_width")"
     local fix_content="$(_awen_pad_right "> ${fix_cmd}" "$content_width")"
-    local foot_content="$(_awen_pad_right "enter apply fix   shift+tab ignore" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↵ apply fix   ⇥ ignore")" "$content_width")"
     local bottom_line="  ╰${rule}╯"
     local line
 
@@ -578,7 +589,8 @@ _awen_render_failure_panel() {
     line="  │ ${foot_content} │"
     pd+=$'\n'"${line}"
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
-    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#foot_content} )) $_AWEN_STYLE_DIM")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM")
+    region_highlight+=("$(( offset + 4 + content_width - 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_MUTED")
     (( offset += 1 + ${#line} ))
 
     pd+=$'\n'"${bottom_line}"
