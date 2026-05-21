@@ -164,12 +164,7 @@ jobs:
 
             def caveats
               <<~EOS
-                Add this line to your ~/.zshrc:
-                  source #{opt_share}/awen/awen.zsh
-
-                Then restart your shell or run: source ~/.zshrc
-
-                Awen will create ~/.config/awen/ and ~/.local/share/awen/ on first launch.
+                Run "awen setup" to configure your shell, then restart your terminal.
               EOS
             end
 

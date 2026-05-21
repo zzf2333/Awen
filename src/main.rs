@@ -36,6 +36,8 @@ enum Commands {
     Config,
     /// Show current context engine state
     Context,
+    /// Configure shell integration (add source line to ~/.zshrc)
+    Setup,
     /// Manage command history
     History {
         #[command(subcommand)]
@@ -67,6 +69,7 @@ async fn main() {
         Commands::Logs { lines } => cmd_logs(lines),
         Commands::Config => cmd_config(),
         Commands::Context => cmd_context().await,
+        Commands::Setup => cmd_setup(),
         Commands::History { action } => match action {
             HistoryAction::Import { file, force } => cmd_history_import(file, force),
         },
@@ -219,6 +222,71 @@ fn cmd_history_import(file: Option<PathBuf>, force: bool) {
             std::process::exit(1);
         }
     }
+}
+
+fn cmd_setup() {
+    let config_dir = config::config_dir();
+    let data_dir = config::data_dir();
+    std::fs::create_dir_all(&config_dir).ok();
+    std::fs::create_dir_all(&data_dir).ok();
+
+    let plugin_path = find_plugin().unwrap_or_else(|| {
+        eprintln!("error: could not find awen.zsh plugin");
+        eprintln!("  checked: <brew_prefix>/share/awen/awen.zsh");
+        eprintln!("  checked: {}/awen.zsh", config_dir.display());
+        std::process::exit(1);
+    });
+
+    let home = dirs::home_dir().unwrap_or_else(|| {
+        eprintln!("error: could not determine home directory");
+        std::process::exit(1);
+    });
+    let zshrc = home.join(".zshrc");
+
+    if zshrc.exists()
+        && let Ok(content) = std::fs::read_to_string(&zshrc)
+        && content.contains("awen.zsh")
+    {
+        println!("awen is already configured in {}", zshrc.display());
+        println!("  plugin: {}", plugin_path.display());
+        return;
+    }
+
+    let source_line = format!(
+        "\n# Awen — Terminal Intelligence Layer\nsource {}\n",
+        plugin_path.display()
+    );
+    if let Err(e) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&zshrc)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, source_line.as_bytes()))
+    {
+        eprintln!("error: failed to write to {}: {e}", zshrc.display());
+        std::process::exit(1);
+    }
+
+    println!("awen setup complete!");
+    println!("  plugin: {}", plugin_path.display());
+    println!("  added source line to {}", zshrc.display());
+    println!();
+    println!("restart your shell or run: source ~/.zshrc");
+}
+
+fn find_plugin() -> Option<PathBuf> {
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(prefix) = exe.parent().and_then(|p| p.parent())
+    {
+        let brew_plugin = prefix.join("share/awen/awen.zsh");
+        if brew_plugin.exists() {
+            return Some(brew_plugin);
+        }
+    }
+    let local = config::config_dir().join("awen.zsh");
+    if local.exists() {
+        return Some(local);
+    }
+    None
 }
 
 async fn cmd_context() {

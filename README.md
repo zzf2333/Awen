@@ -45,6 +45,7 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 
 ```bash
 brew install zzf2333/tap/awen
+awen setup
 ```
 
 ### Shell Script
@@ -66,8 +67,6 @@ cd Awen
 ---
 
 Restart your shell. Awen starts automatically and imports your zsh history on first launch.
-
-**Optional:** Install `jq` and `socat` for best performance (`brew install jq socat`).
 
 ## Usage
 
@@ -92,6 +91,7 @@ Type `#` followed by a description. Awen translates it to a command:
 ### CLI
 
 ```bash
+awen setup              # Configure shell integration
 awen start              # Start daemon
 awen stop               # Stop daemon
 awen status             # Show status (pid, uptime, history count)
