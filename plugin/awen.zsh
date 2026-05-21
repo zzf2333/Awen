@@ -11,8 +11,8 @@ typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
 typeset -g _AWEN_GHOST_STYLE="fg=238"
 typeset -g _AWEN_STYLE_DIM="fg=241"
-typeset -g _AWEN_STYLE_MUTED="fg=245"
-typeset -g _AWEN_STYLE_TEXT="fg=253"
+typeset -g _AWEN_STYLE_MUTED="fg=250"
+typeset -g _AWEN_STYLE_TEXT="fg=255"
 typeset -g _AWEN_STYLE_SELECTED="fg=255,bold,bg=236"
 typeset -g _AWEN_STYLE_PANEL="fg=238"
 typeset -g _AWEN_STYLE_PANEL_BG="bg=234"
@@ -145,6 +145,7 @@ _awen_remove_ghost_highlight() {
     region_highlight=("${(@)region_highlight:#*bg=234*}")
     region_highlight=("${(@)region_highlight:#*fg=252*}")
     region_highlight=("${(@)region_highlight:#*fg=253*}")
+    region_highlight=("${(@)region_highlight:#*fg=250*}")
     region_highlight=("${(@)region_highlight:#*fg=255*}")
     region_highlight=("${(@)region_highlight:#*fg=245*}")
     region_highlight=("${(@)region_highlight:#*fg=244*}")
@@ -333,8 +334,8 @@ _awen_render_menu() {
     (( content_width < 36 )) && content_width=36
 
     local current_source=""
-    local i item_text item_source item_desc tag tag_style title title_content title_line
-    local cmd_col desc_col tag_col content entry entry_len line_start
+    local i item_text item_source item_desc tag tag_style title title_text title_content title_line
+    local cmd_col desc_col tag_col content entry entry_len line_start spacer_content spacer_line
     local tag_width=8
     local cmd_width=$(( content_width * 48 / 100 ))
     local desc_width=$(( content_width - cmd_width - tag_width - 4 ))
@@ -353,15 +354,24 @@ _awen_render_menu() {
         item_desc="${_AWEN_MENU_DESCS[$i]}"
 
         if [[ "$item_source" != "$current_source" ]]; then
+            if [[ -n "$current_source" ]]; then
+                spacer_content="$(_awen_pad_right "" "$content_width")"
+                spacer_line="  │ ${spacer_content} │"
+                pd+=$'\n'"${spacer_line}"
+                line_start=$(( offset + 1 ))
+                region_highlight+=("${line_start} $(( line_start + ${#spacer_line} )) $_AWEN_STYLE_PANEL")
+                (( offset += 1 + ${#spacer_line} ))
+            fi
             current_source="$item_source"
             title="$(_awen_source_title "$item_source")"
-            title_content="$(_awen_pad_right ":: ${title}" "$content_width")"
+            title_text=":: ${title}"
+            title_content="$(_awen_pad_right "$title_text" "$content_width")"
             title_line="  │ ${title_content} │"
             pd+=$'\n'"${title_line}"
             line_start=$(( offset + 1 ))
             region_highlight+=("${line_start} $(( line_start + ${#title_line} )) $_AWEN_STYLE_PANEL")
             region_highlight+=("$(( line_start + 4 )) $(( line_start + 6 )) $(_awen_source_style "$item_source")")
-            region_highlight+=("$(( line_start + 6 )) $(( line_start + 4 + ${#title} + 2 )) $_AWEN_STYLE_MUTED")
+            region_highlight+=("$(( line_start + 7 )) $(( line_start + 4 + ${#title_text} + 1 )) $_AWEN_STYLE_MUTED")
             (( offset += 1 + ${#title_line} ))
         fi
 
@@ -369,14 +379,14 @@ _awen_render_menu() {
         tag_style="$(_awen_source_style "$item_source")"
 
         if (( ${#item_text} > cmd_width )); then
-            cmd_col="${item_text:0:$((cmd_width-3))}..."
+            cmd_col="${item_text[1,$(( cmd_width - 3 ))]}..."
         else
             cmd_col="$(_awen_pad_right "$item_text" "$cmd_width")"
         fi
 
         if [[ -n "$item_desc" ]]; then
             if (( ${#item_desc} > desc_width )); then
-                desc_col="${item_desc:0:$((desc_width-3))}..."
+                desc_col="${item_desc[1,$(( desc_width - 3 ))]}..."
             else
                 desc_col="$(_awen_pad_right "$item_desc" "$desc_width")"
             fi
