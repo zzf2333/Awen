@@ -110,10 +110,15 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
 
-          SHA_ARM64_DARWIN=$(grep "aarch64-apple-darwin" *.sha256 | awk '{print $1}')
-          SHA_X86_64_DARWIN=$(grep "x86_64-apple-darwin" *.sha256 | awk '{print $1}')
-          SHA_X86_64_LINUX=$(grep "x86_64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
-          SHA_ARM64_LINUX=$(grep "aarch64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
+          SHA_ARM64_DARWIN=$(grep -h "aarch64-apple-darwin" *.sha256 | awk '{print $1}')
+          SHA_X86_64_DARWIN=$(grep -h "x86_64-apple-darwin" *.sha256 | awk '{print $1}')
+          SHA_X86_64_LINUX=$(grep -h "x86_64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
+          SHA_ARM64_LINUX=$(grep -h "aarch64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
+
+          if [ -z "$SHA_ARM64_DARWIN" ] || [ -z "$SHA_X86_64_DARWIN" ] || [ -z "$SHA_X86_64_LINUX" ] || [ -z "$SHA_ARM64_LINUX" ]; then
+            echo "::error::Failed to extract SHA256 hashes"
+            exit 1
+          fi
 
           git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/zzf2333/homebrew-tap.git"
           cd homebrew-tap
