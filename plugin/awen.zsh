@@ -561,6 +561,77 @@ _awen_render_risk_panel() {
     POSTDISPLAY="$pd"
 }
 
+_awen_render_ai_loading_panel() {
+    _awen_remove_ghost_highlight
+    _awen_menu_reset
+
+    local offset=$#BUFFER
+    local pd=""
+    local content_width=$(( COLUMNS - 8 ))
+    (( content_width > 86 )) && content_width=86
+    (( content_width < 36 )) && content_width=36
+
+    local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
+    local ai_icon="$(_awen_source_icon ai)"
+    local title_text="${ai_icon} $(_awen_source_title ai)"
+    local loading_text="  thinking..."
+    local hint_text="$_AWEN_HINT"
+
+    local title_content="$(_awen_pad_right "$title_text" "$content_width")"
+    local loading_content="$(_awen_pad_right "$loading_text" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "esc dismiss")" "$content_width")"
+    local line
+
+    line="  ╭${rule}╮"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_PANEL")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${title_content} │"
+    pd+=$'\n'"${line}"
+    local base=$(( offset + 1 ))
+    region_highlight+=("${base} $(( base + ${#line} )) $_AWEN_STYLE_PANEL")
+    region_highlight+=("$(( base + 4 )) $(( base + 4 + ${#ai_icon} )) $_AWEN_STYLE_AI")
+    region_highlight+=("$(( base + 5 + ${#ai_icon} )) $(( base + 4 + ${#title_text} + 1 )) $_AWEN_STYLE_MUTED")
+    (( offset += 1 + ${#line} ))
+
+    if [[ -n "$hint_text" ]]; then
+        local hint_content="$(_awen_pad_right "$hint_text" "$content_width")"
+        line="  │ ${hint_content} │"
+        pd+=$'\n'"${line}"
+        base=$(( offset + 1 ))
+        region_highlight+=("${base} $(( base + ${#line} )) $_AWEN_STYLE_PANEL")
+        region_highlight+=("$(( base + 4 )) $(( base + 4 + ${#hint_content} )) $_AWEN_STYLE_TEXT")
+        (( offset += 1 + ${#line} ))
+    fi
+
+    line="  │ ${loading_content} │"
+    pd+=$'\n'"${line}"
+    base=$(( offset + 1 ))
+    region_highlight+=("${base} $(( base + ${#line} )) $_AWEN_STYLE_PANEL")
+    region_highlight+=("$(( base + 4 )) $(( base + 4 + ${#loading_text} )) $_AWEN_STYLE_DIM")
+    (( offset += 1 + ${#line} ))
+
+    line="  ├${rule}┤"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_PANEL")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${foot_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_PANEL")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM")
+    region_highlight+=("$(( offset + 4 + content_width - 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_MUTED")
+    (( offset += 1 + ${#line} ))
+
+    line="  ╰${rule}╯"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_PANEL")
+
+    POSTDISPLAY="$pd"
+    _AWEN_SUGGESTION=""
+}
+
 _awen_render_failure_panel() {
     local failure_idx="$1"
     local hint_text="$_AWEN_HINT"
@@ -880,7 +951,10 @@ _awen_suggest_next() {
 
     _awen_apply_response "$response"
 
-    [[ "$_AWEN_NEED_AI" != "false" ]] && _awen_schedule_ai
+    if [[ "$_AWEN_NEED_AI" != "false" ]]; then
+        _awen_render_ai_loading_panel
+        _awen_schedule_ai
+    fi
 }
 
 # Phase 1: Synchronous local-only suggest (<20ms)
