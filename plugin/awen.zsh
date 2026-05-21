@@ -9,7 +9,18 @@ typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
-typeset -g _AWEN_GHOST_STYLE="fg=242"
+typeset -g _AWEN_GHOST_STYLE="fg=238"
+typeset -g _AWEN_STYLE_DIM="fg=241"
+typeset -g _AWEN_STYLE_MUTED="fg=245"
+typeset -g _AWEN_STYLE_TEXT="fg=253"
+typeset -g _AWEN_STYLE_SELECTED="fg=255,bold,bg=236"
+typeset -g _AWEN_STYLE_PANEL="fg=238"
+typeset -g _AWEN_STYLE_PANEL_BG="bg=234"
+typeset -g _AWEN_STYLE_HISTORY="fg=146"
+typeset -g _AWEN_STYLE_SPEC="fg=69"
+typeset -g _AWEN_STYLE_AI="fg=177"
+typeset -g _AWEN_STYLE_RISK="fg=220"
+typeset -g _AWEN_STYLE_FIX="fg=108"
 
 # Async AI state
 typeset -g _AWEN_AI_PID=""
@@ -128,13 +139,82 @@ _awen_menu_reset() {
 _awen_remove_ghost_highlight() {
     region_highlight=("${(@)region_highlight:#*$_AWEN_GHOST_STYLE}")
     region_highlight=("${(@)region_highlight:#*standout*}")
+    region_highlight=("${(@)region_highlight:#*bg=237*}")
+    region_highlight=("${(@)region_highlight:#*bg=236*}")
+    region_highlight=("${(@)region_highlight:#*bg=235*}")
+    region_highlight=("${(@)region_highlight:#*bg=234*}")
+    region_highlight=("${(@)region_highlight:#*fg=252*}")
+    region_highlight=("${(@)region_highlight:#*fg=253*}")
+    region_highlight=("${(@)region_highlight:#*fg=255*}")
     region_highlight=("${(@)region_highlight:#*fg=245*}")
     region_highlight=("${(@)region_highlight:#*fg=244*}")
     region_highlight=("${(@)region_highlight:#*fg=240*}")
+    region_highlight=("${(@)region_highlight:#*fg=241*}")
+    region_highlight=("${(@)region_highlight:#*fg=146*}")
+    region_highlight=("${(@)region_highlight:#*fg=75*}")
+    region_highlight=("${(@)region_highlight:#*fg=69*}")
+    region_highlight=("${(@)region_highlight:#*fg=177*}")
+    region_highlight=("${(@)region_highlight:#*fg=220*}")
+    region_highlight=("${(@)region_highlight:#*fg=114*}")
+    region_highlight=("${(@)region_highlight:#*fg=108*}")
     region_highlight=("${(@)region_highlight:#*fg=214*}")
     region_highlight=("${(@)region_highlight:#*fg=82*}")
     region_highlight=("${(@)region_highlight:#*fg=82,bold*}")
     _AWEN_GHOST_HIGHLIGHT=""
+}
+
+_awen_source_label() {
+    case "$1" in
+        history) printf '%s' "history" ;;
+        specs)   printf '%s' "spec" ;;
+        ai)      printf '%s' "ai" ;;
+        failure) printf '%s' "fix" ;;
+        *)       printf '%s' "$1" ;;
+    esac
+}
+
+_awen_source_style() {
+    case "$1" in
+        history) printf '%s' "$_AWEN_STYLE_HISTORY" ;;
+        specs)   printf '%s' "$_AWEN_STYLE_SPEC" ;;
+        ai)      printf '%s' "$_AWEN_STYLE_AI" ;;
+        failure) printf '%s' "$_AWEN_STYLE_FIX" ;;
+        risk)    printf '%s' "$_AWEN_STYLE_RISK" ;;
+        *)       printf '%s' "$_AWEN_STYLE_DIM" ;;
+    esac
+}
+
+_awen_source_title() {
+    case "$1" in
+        history) printf '%s' "history" ;;
+        specs)   printf '%s' "options" ;;
+        ai)      printf '%s' "ai suggestions" ;;
+        failure) printf '%s' "fix" ;;
+        *)       printf '%s' "suggestions" ;;
+    esac
+}
+
+_awen_pad_right() {
+    local text="$1" width="$2"
+    local len=${#text}
+    if (( len >= width )); then
+        printf '%s' "${text:0:width}"
+    else
+        printf '%s%s' "$text" "$(_awen_repeat ' ' $(( width - len )))"
+    fi
+}
+
+_awen_repeat() {
+    local char="$1" count="$2" out=""
+    local i
+    for (( i=0; i<count; i++ )); do
+        out+="$char"
+    done
+    printf '%s' "$out"
+}
+
+_awen_keycap_line() {
+    printf '%s' "up/down select   enter accept   right next word   esc dismiss"
 }
 
 _awen_reconstruct_full_cmd() {
@@ -248,59 +328,101 @@ _awen_render_menu() {
         (( offset += ${#ghost_part} ))
     fi
 
-    local i item_text item_source item_desc tag
-    local cmd_part desc_part tag_part entry entry_len
-    local max_width=$(( COLUMNS - 4 ))
+    local content_width=$(( COLUMNS - 8 ))
+    (( content_width > 86 )) && content_width=86
+    (( content_width < 36 )) && content_width=36
+
+    local current_source=""
+    local i item_text item_source item_desc tag tag_style title title_content title_line
+    local cmd_col desc_col tag_col content entry entry_len line_start
+    local tag_width=8
+    local cmd_width=$(( content_width * 48 / 100 ))
+    local desc_width=$(( content_width - cmd_width - tag_width - 4 ))
+    (( cmd_width < 18 )) && cmd_width=18
+    (( desc_width < 8 )) && desc_width=8
+
+    local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
+    local top_line="  ╭${rule}╮"
+    pd+=$'\n'"${top_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#top_line} )) $_AWEN_STYLE_PANEL")
+    (( offset += 1 + ${#top_line} ))
+
     for (( i=scroll_start; i<=scroll_end; i++ )); do
         item_text="${_AWEN_MENU_TEXTS[$i]}"
         item_source="${_AWEN_MENU_SOURCES[$i]}"
         item_desc="${_AWEN_MENU_DESCS[$i]}"
-        tag=""
-        case "$item_source" in
-            history) tag="[hist]" ;;
-            specs)   tag="[spec]" ;;
-            ai)      tag="[ai]"   ;;
-            failure) tag="[fix]"  ;;
-        esac
 
-        cmd_part="  ${item_text}"
-        desc_part=""
-        tag_part=""
-        [[ -n "$tag" ]] && tag_part="  ${tag}"
-
-        if [[ -n "$item_desc" ]]; then
-            local avail=$(( max_width - ${#cmd_part} - ${#tag_part} - 2 ))
-            if (( avail > 8 )); then
-                if (( ${#item_desc} > avail )); then
-                    item_desc="${item_desc:0:$((avail-1))}…"
-                fi
-                desc_part="  ${item_desc}"
-            fi
+        if [[ "$item_source" != "$current_source" ]]; then
+            current_source="$item_source"
+            title="$(_awen_source_title "$item_source")"
+            title_content="$(_awen_pad_right ":: ${title}" "$content_width")"
+            title_line="  │ ${title_content} │"
+            pd+=$'\n'"${title_line}"
+            line_start=$(( offset + 1 ))
+            region_highlight+=("${line_start} $(( line_start + ${#title_line} )) $_AWEN_STYLE_PANEL")
+            region_highlight+=("$(( line_start + 4 )) $(( line_start + 6 )) $(_awen_source_style "$item_source")")
+            region_highlight+=("$(( line_start + 6 )) $(( line_start + 4 + ${#title} + 2 )) $_AWEN_STYLE_MUTED")
+            (( offset += 1 + ${#title_line} ))
         fi
 
-        entry="${cmd_part}${desc_part}${tag_part}"
+        tag="$(_awen_source_label "$item_source")"
+        tag_style="$(_awen_source_style "$item_source")"
+
+        if (( ${#item_text} > cmd_width )); then
+            cmd_col="${item_text:0:$((cmd_width-3))}..."
+        else
+            cmd_col="$(_awen_pad_right "$item_text" "$cmd_width")"
+        fi
+
+        if [[ -n "$item_desc" ]]; then
+            if (( ${#item_desc} > desc_width )); then
+                desc_col="${item_desc:0:$((desc_width-3))}..."
+            else
+                desc_col="$(_awen_pad_right "$item_desc" "$desc_width")"
+            fi
+        else
+            desc_col="$(_awen_pad_right "" "$desc_width")"
+        fi
+
+        tag_col="$(_awen_pad_right "$tag" "$tag_width")"
+        if (( i == _AWEN_MENU_INDEX )); then
+            content="> ${cmd_col} ${desc_col} ${tag_col}"
+        else
+            content="  ${cmd_col} ${desc_col} ${tag_col}"
+        fi
+        content="$(_awen_pad_right "$content" "$content_width")"
+        entry="  │ ${content} │"
         entry_len=${#entry}
         pd+=$'\n'"${entry}"
 
         local base=$(( offset + 1 ))
+        region_highlight+=("${base} $(( base + entry_len )) $_AWEN_STYLE_PANEL")
         if (( i == _AWEN_MENU_INDEX )); then
-            region_highlight+=("${base} $(( base + entry_len )) standout")
+            region_highlight+=("$(( base + 4 )) $(( base + 4 + content_width )) $_AWEN_STYLE_SELECTED")
+            region_highlight+=("$(( base + 4 + content_width - tag_width )) $(( base + 4 + content_width )) ${tag_style},bold,bg=236")
         else
-            region_highlight+=("${base} $(( base + ${#cmd_part} )) fg=245")
-            if [[ -n "$desc_part" ]]; then
-                region_highlight+=("$(( base + ${#cmd_part} )) $(( base + ${#cmd_part} + ${#desc_part} )) fg=244")
-            fi
-            if [[ -n "$tag_part" ]]; then
-                region_highlight+=("$(( base + ${#cmd_part} + ${#desc_part} )) $(( base + entry_len )) fg=240")
-            fi
+            region_highlight+=("$(( base + 4 )) $(( base + 6 + cmd_width )) $_AWEN_STYLE_TEXT")
+            region_highlight+=("$(( base + 7 + cmd_width )) $(( base + 7 + cmd_width + desc_width )) $_AWEN_STYLE_MUTED")
+            region_highlight+=("$(( base + 4 + content_width - tag_width )) $(( base + 4 + content_width )) ${tag_style}")
         fi
         (( offset += 1 + entry_len ))
     done
 
-    local foot="  ↑↓ navigate  ⏎ confirm  shift+tab dismiss"
-    local foot_len=${#foot}
-    pd+=$'\n'"${foot}"
-    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + foot_len )) fg=240")
+    local mid_line="  ├${rule}┤"
+    pd+=$'\n'"${mid_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#mid_line} )) $_AWEN_STYLE_PANEL")
+    (( offset += 1 + ${#mid_line} ))
+
+    local foot_content="$(_awen_pad_right "$(_awen_keycap_line)" "$content_width")"
+    local foot_line="  │ ${foot_content} │"
+    pd+=$'\n'"${foot_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#foot_line} )) $_AWEN_STYLE_PANEL")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width )) $_AWEN_STYLE_DIM")
+    (( offset += 1 + ${#foot_line} ))
+
+    local bottom_line="  ╰${rule}╯"
+    pd+=$'\n'"${bottom_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#bottom_line} )) $_AWEN_STYLE_PANEL")
 
     POSTDISPLAY="$pd"
     _AWEN_SUGGESTION="$selected_full"
@@ -308,13 +430,66 @@ _awen_render_menu() {
 
 _awen_render_hint() {
     if [[ -n "$_AWEN_WARNING" ]]; then
-        # Show warning above current line
-        local warning_text="  ╭ ⚠ ${_AWEN_WARNING}"
+        local warning_text="  ⚠ ${_AWEN_WARNING}"
         zle -M "$warning_text"
     elif [[ -n "$_AWEN_HINT" ]]; then
-        local hint_text="  ╭ ℹ ${_AWEN_HINT}"
+        local hint_text="  ⓘ ${_AWEN_HINT}"
         zle -M "$hint_text"
     fi
+}
+
+_awen_render_risk_panel() {
+    local warning_text="$1"
+    _awen_remove_ghost_highlight
+    _awen_menu_reset
+    _AWEN_SUGGESTION=""
+
+    local offset=$#BUFFER
+    local pd=""
+    local content_width=$(( COLUMNS - 8 ))
+    (( content_width > 86 )) && content_width=86
+    (( content_width < 42 )) && content_width=42
+    local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
+    local top_line="  ╭${rule}╮"
+    local title_content="$(_awen_pad_right "! risk warning (risk)" "$content_width")"
+    local text_content="$(_awen_pad_right "$warning_text" "$content_width")"
+    local foot_content="$(_awen_pad_right "enter confirm   shift+tab ignore   Awen suggests only" "$content_width")"
+    local bottom_line="  ╰${rule}╯"
+    local line
+
+    for line in "$top_line"; do
+        pd+=$'\n'"${line}"
+        region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
+        (( offset += 1 + ${#line} ))
+    done
+
+    line="  │ ${title_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#title_content} )) ${_AWEN_STYLE_RISK},bold")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${text_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#text_content} )) $_AWEN_STYLE_TEXT")
+    (( offset += 1 + ${#line} ))
+
+    line="  ├${rule}┤"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${foot_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_RISK")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#foot_content} )) $_AWEN_STYLE_RISK")
+    (( offset += 1 + ${#line} ))
+
+    pd+=$'\n'"${bottom_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#bottom_line} )) $_AWEN_STYLE_RISK")
+
+    POSTDISPLAY="$pd"
 }
 
 _awen_render_failure_panel() {
@@ -337,19 +512,54 @@ _awen_render_failure_panel() {
     fi
 
     local display_hint="${hint_text:-$fix_desc}"
-    local line1="  ╭ ℹ ${display_hint}"
-    pd+=$'\n'"${line1}"
-    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line1} )) fg=214")
-    (( offset += 1 + ${#line1} ))
+    local content_width=$(( COLUMNS - 8 ))
+    (( content_width > 86 )) && content_width=86
+    (( content_width < 42 )) && content_width=42
+    local rule="$(_awen_repeat "─" $(( content_width + 2 )))"
+    local top_line="  ╭${rule}╮"
+    local title_content="$(_awen_pad_right "i command failed" "$content_width")"
+    local hint_content="$(_awen_pad_right "$display_hint" "$content_width")"
+    local fix_content="$(_awen_pad_right "> ${fix_cmd}" "$content_width")"
+    local foot_content="$(_awen_pad_right "enter apply fix   shift+tab ignore" "$content_width")"
+    local bottom_line="  ╰${rule}╯"
+    local line
 
-    local line2="  │ → ${fix_cmd}"
-    pd+=$'\n'"${line2}"
-    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line2} )) fg=82")
-    (( offset += 1 + ${#line2} ))
+    line="$top_line"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    (( offset += 1 + ${#line} ))
 
-    local line3="  ╰ ⏎ accept  shift+tab dismiss"
-    pd+=$'\n'"${line3}"
-    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line3} )) fg=240")
+    line="  │ ${title_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#title_content} )) ${_AWEN_STYLE_FIX},bold")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${hint_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#hint_content} )) $_AWEN_STYLE_TEXT")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${fix_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#fix_content} )) ${_AWEN_STYLE_FIX},bold")
+    (( offset += 1 + ${#line} ))
+
+    line="  ├${rule}┤"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    (( offset += 1 + ${#line} ))
+
+    line="  │ ${foot_content} │"
+    pd+=$'\n'"${line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#foot_content} )) $_AWEN_STYLE_DIM")
+    (( offset += 1 + ${#line} ))
+
+    pd+=$'\n'"${bottom_line}"
+    region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#bottom_line} )) $_AWEN_STYLE_FIX")
 
     POSTDISPLAY="$pd"
     _AWEN_SUGGESTION="$full_cmd"
@@ -550,7 +760,9 @@ _awen_apply_response() {
         done
     fi
 
-    if (( failure_idx > 0 )); then
+    if [[ -n "$_AWEN_WARNING" ]]; then
+        _awen_render_risk_panel "$_AWEN_WARNING"
+    elif (( failure_idx > 0 )); then
         _AWEN_MENU_COUNT=$count
         _awen_render_failure_panel "$failure_idx"
     elif [[ "$_AWEN_MENU_ENABLED" == "1" && $count -ge 2 ]]; then
@@ -570,7 +782,9 @@ _awen_apply_response() {
         _AWEN_SUGGESTION=""
     fi
 
-    _awen_render_hint
+    if [[ -z "$_AWEN_WARNING" ]]; then
+        _awen_render_hint
+    fi
 }
 
 _awen_suggest_next() {
