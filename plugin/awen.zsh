@@ -250,7 +250,11 @@ _awen_footer_line() {
 }
 
 _awen_reconstruct_full_cmd() {
-    local input="$1" suggestion="$2"
+    local input="$1" suggestion="$2" source="${3:-}"
+    if [[ "$source" == "history" || "$source" == "failure" ]]; then
+        printf '%s' "$suggestion"
+        return
+    fi
     if [[ "$suggestion" == "$input"* ]]; then
         printf '%s' "$suggestion"
         return
@@ -289,7 +293,7 @@ _awen_clear_hint() {
 }
 
 _awen_render_ghost() {
-    local suggestion="$1"
+    local suggestion="$1" source="${2:-}"
 
     _awen_remove_ghost_highlight
 
@@ -300,14 +304,18 @@ _awen_render_ghost() {
     fi
 
     local full_suggestion
-    full_suggestion=$(_awen_reconstruct_full_cmd "$BUFFER" "$suggestion")
+    full_suggestion=$(_awen_reconstruct_full_cmd "$BUFFER" "$suggestion" "$source")
     _AWEN_SUGGESTION="$full_suggestion"
 
-    local ghost_part="${full_suggestion#$BUFFER}"
-    if [[ -n "$ghost_part" ]]; then
-        POSTDISPLAY="$ghost_part"
-        _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
-        region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
+    if [[ "$full_suggestion" == "$BUFFER"* ]]; then
+        local ghost_part="${full_suggestion#$BUFFER}"
+        if [[ -n "$ghost_part" ]]; then
+            POSTDISPLAY="$ghost_part"
+            _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
+            region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
+        else
+            POSTDISPLAY=""
+        fi
     else
         POSTDISPLAY=""
     fi
@@ -336,7 +344,8 @@ _awen_render_menu() {
 
     local input="$BUFFER"
     local selected_full="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
-    local ghost_part="${selected_full#$input}"
+    local ghost_part=""
+    [[ "$selected_full" == "$input"* ]] && ghost_part="${selected_full#$input}"
 
     local max_visible=$_AWEN_MENU_MAX
     (( max_visible > LINES - 3 )) && max_visible=$(( LINES - 3 ))
@@ -536,7 +545,8 @@ _awen_render_failure_panel() {
 
     _awen_remove_ghost_highlight
 
-    local ghost_part="${full_cmd#$BUFFER}"
+    local ghost_part=""
+    [[ "$full_cmd" == "$BUFFER"* ]] && ghost_part="${full_cmd#$BUFFER}"
     local offset=$#BUFFER
     local pd=""
 
@@ -782,7 +792,7 @@ _awen_apply_response() {
     local input="$BUFFER"
     local i
     for (( i=1; i<=count; i++ )); do
-        _AWEN_MENU_FULL_CMDS+=("$(_awen_reconstruct_full_cmd "$input" "${_AWEN_MENU_TEXTS[$i]}")")
+        _AWEN_MENU_FULL_CMDS+=("$(_awen_reconstruct_full_cmd "$input" "${_AWEN_MENU_TEXTS[$i]}" "${_AWEN_MENU_SOURCES[$i]}")")
     done
 
     # Detect failure suggestion for dedicated panel
@@ -809,8 +819,9 @@ _awen_apply_response() {
         _awen_render_menu
     elif [[ $count -ge 1 ]]; then
         local single_text="${_AWEN_MENU_TEXTS[1]}"
+        local single_source="${_AWEN_MENU_SOURCES[1]}"
         _awen_menu_reset
-        _awen_render_ghost "$single_text"
+        _awen_render_ghost "$single_text" "$single_source"
     else
         _awen_menu_reset
         _awen_remove_ghost_highlight
@@ -1009,14 +1020,20 @@ _awen_accept_word() {
         _awen_remove_ghost_highlight
         _awen_menu_reset
         local input="$BUFFER"
-        local remaining="${selected#$input}"
+        local remaining
+        if [[ "$selected" == "$input"* ]]; then
+            remaining="${selected#$input}"
+        else
+            remaining="$selected"
+        fi
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
             BUFFER="$selected"
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
         else
-            BUFFER="${input}${next_word} "
+            local accepted="${selected%$remaining}"
+            BUFFER="${accepted}${next_word} "
             _AWEN_SUGGESTION="$selected"
             _awen_render_ghost "$selected"
         fi
@@ -1024,7 +1041,12 @@ _awen_accept_word() {
         zle -R
     elif [[ -n "$_AWEN_SUGGESTION" ]]; then
         local input="$BUFFER"
-        local remaining="${_AWEN_SUGGESTION#$input}"
+        local remaining
+        if [[ "$_AWEN_SUGGESTION" == "$input"* ]]; then
+            remaining="${_AWEN_SUGGESTION#$input}"
+        else
+            remaining="$_AWEN_SUGGESTION"
+        fi
         local next_word="${remaining%% *}"
         if [[ "$next_word" == "$remaining" ]]; then
             _awen_cancel_pending_ai
@@ -1033,7 +1055,8 @@ _awen_accept_word() {
             _AWEN_SUGGESTION=""
             POSTDISPLAY=""
         else
-            BUFFER="${input}${next_word} "
+            local accepted="${_AWEN_SUGGESTION%$remaining}"
+            BUFFER="${accepted}${next_word} "
             _awen_render_ghost "$_AWEN_SUGGESTION"
         fi
         CURSOR=${#BUFFER}
