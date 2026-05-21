@@ -29,6 +29,7 @@ typeset -g _AWEN_AI_SEQ=0
 typeset -g _AWEN_AI_ACTIVE_SEQ=0
 typeset -g _AWEN_NEED_AI=""
 typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
+typeset -g _AWEN_AI_LOADING=0
 typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
 typeset -g _AWEN_LAST_LOCAL_MS=0
 
@@ -452,6 +453,29 @@ _awen_render_menu() {
         (( offset += 1 + entry_len ))
     done
 
+    if (( _AWEN_AI_LOADING )); then
+        local ai_icon="$(_awen_source_icon ai)"
+        local ai_title="$(_awen_source_title ai)"
+        local loading_title="${ai_icon} ${ai_title}"
+        local loading_title_content="$(_awen_pad_right "$loading_title" "$content_width")"
+        local loading_title_line="  │ ${loading_title_content} │"
+        pd+=$'\n'"${loading_title_line}"
+        local lt_base=$(( offset + 1 ))
+        region_highlight+=("${lt_base} $(( lt_base + ${#loading_title_line} )) $_AWEN_STYLE_PANEL")
+        region_highlight+=("$(( lt_base + 4 )) $(( lt_base + 4 + ${#ai_icon} )) $_AWEN_STYLE_AI")
+        region_highlight+=("$(( lt_base + 5 + ${#ai_icon} )) $(( lt_base + 4 + ${#loading_title} + 1 )) $_AWEN_STYLE_MUTED")
+        (( offset += 1 + ${#loading_title_line} ))
+
+        local loading_text="  thinking..."
+        local loading_content="$(_awen_pad_right "$loading_text" "$content_width")"
+        local loading_line="  │ ${loading_content} │"
+        pd+=$'\n'"${loading_line}"
+        local ll_base=$(( offset + 1 ))
+        region_highlight+=("${ll_base} $(( ll_base + ${#loading_line} )) $_AWEN_STYLE_PANEL")
+        region_highlight+=("$(( ll_base + 4 )) $(( ll_base + 4 + ${#loading_text} )) $_AWEN_STYLE_DIM")
+        (( offset += 1 + ${#loading_line} ))
+    fi
+
     local mid_line="  ├${rule}┤"
     pd+=$'\n'"${mid_line}"
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#mid_line} )) $_AWEN_STYLE_PANEL")
@@ -592,6 +616,16 @@ _awen_render_failure_panel() {
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
     region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#fix_content} )) ${_AWEN_STYLE_FIX},bold")
     (( offset += 1 + ${#line} ))
+
+    if (( _AWEN_AI_LOADING )); then
+        local ai_loading_text="$(_awen_source_icon ai) thinking..."
+        local ai_loading_content="$(_awen_pad_right "$ai_loading_text" "$content_width")"
+        line="  │ ${ai_loading_content} │"
+        pd+=$'\n'"${line}"
+        region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX")
+        region_highlight+=("$(( offset + 4 )) $(( offset + 4 + ${#ai_loading_text} )) $_AWEN_STYLE_AI")
+        (( offset += 1 + ${#line} ))
+    fi
 
     line="  ├${rule}┤"
     pd+=$'\n'"${line}"
@@ -892,6 +926,7 @@ _awen_cancel_pending_ai() {
         kill "$_AWEN_AI_PID" 2>/dev/null
         _AWEN_AI_PID=""
     fi
+    _AWEN_AI_LOADING=0
 }
 
 # Phase 2: Schedule async AI request after AWEN_AI_DELAY
@@ -943,6 +978,20 @@ _awen_schedule_ai() {
         fi
     ) &!
     _AWEN_AI_PID=$!
+    _AWEN_AI_LOADING=1
+    if (( _AWEN_MENU_ACTIVE )); then
+        local _has_failure=0
+        local _fi
+        for (( _fi=1; _fi<=${#_AWEN_MENU_SOURCES[@]}; _fi++ )); do
+            [[ "${_AWEN_MENU_SOURCES[$_fi]}" == "failure" ]] && _has_failure=1 && break
+        done
+        if (( _has_failure && _AWEN_MENU_INDEX == _fi )); then
+            _awen_render_failure_panel "$_fi"
+        else
+            _awen_render_menu
+        fi
+        zle -R
+    fi
 }
 
 _awen_check_ai_result() {
@@ -950,6 +999,7 @@ _awen_check_ai_result() {
     local response
     response=$(<"$_AWEN_AI_RESULT_FILE")
     : > "$_AWEN_AI_RESULT_FILE"
+    _AWEN_AI_LOADING=0
     [[ -z "$response" ]] && return
 
     if [[ "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]]; then
