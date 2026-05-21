@@ -122,6 +122,7 @@ timeout_ms = 30000              # AI request timeout in ms (async, never blocks 
 max_tokens = 1024               # Max tokens for AI generation (reasoning models need more)
 min_local_candidates = 2        # AI triggers only when local results < this AND confidence < threshold
 min_local_confidence = 0.6      # AI triggers only when max confidence < this AND count < threshold
+cache_ttl_minutes = 30          # Cache TTL for AI responses
 
 [ai.deepseek]
 api_key = ""                    # Or set DEEPSEEK_API_KEY env var
@@ -141,6 +142,7 @@ capture_stderr = true           # Capture stderr for failure recovery
 
 [ui]
 ghost_text_color = 242          # Ghost text color (ANSI 256)
+hint_style = "above"            # Hint display position: "above" or "below"
 dropdown_max_items = 8          # Max items in candidate menu (planned)
 risk_detection = true           # Dangerous command warnings
 command_explanation = false     # Command explanation (planned, not yet implemented)

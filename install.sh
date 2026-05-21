@@ -82,7 +82,7 @@ session_history_size = 20
 stderr_max_chars = 500
 repo_detect = true
 git_context = true
-capture_stderr = false
+capture_stderr = true
 
 [ui]
 ghost_text_color = 242
