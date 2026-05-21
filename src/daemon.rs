@@ -5,7 +5,7 @@ use crate::layer::failure::FailureLayer;
 use crate::layer::history::HistoryLayer;
 use crate::layer::risk::RiskLayer;
 use crate::layer::specs::SpecsLayer;
-use crate::pipeline::{AiParams, AiTriggerPolicy, LocalResult, SuggestionPipeline};
+use crate::pipeline::{AiDecision, AiParams, AiTriggerPolicy, LocalResult, SuggestionPipeline};
 use crate::protocol::*;
 
 use std::sync::Arc;
@@ -220,13 +220,10 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let (local, ai_params, policy, last_ai_at) = {
+    let (local, ai_params, decision) = {
         let mut st = state.lock().await;
 
-        let (response, local_failure_matched, has_failure_context, has_warning) = if req
-            .input
-            .is_empty()
-        {
+        let (response, local_failure_matched, has_failure_context) = if req.input.is_empty() {
             let mut suggestions = st.history.suggest_next(&req.context.cwd, 5);
 
             let mut hint = None;
@@ -252,7 +249,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
                 warning: None,
                 need_ai: false,
             };
-            (response, local_failure_matched, has_failure_context, false)
+            (response, local_failure_matched, has_failure_context)
         } else {
             st.context.update_cwd(req.context.cwd.clone());
 
@@ -282,23 +279,15 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             } else {
                 None
             };
-            let has_warning = warning.is_some();
-
             let response =
                 crate::arbitrator::Arbitrator::arbitrate(suggestions, &req.context, hint, warning);
-            (
-                response,
-                local_failure_matched,
-                has_failure_context,
-                has_warning,
-            )
+            (response, local_failure_matched, has_failure_context)
         };
 
         let local = LocalResult {
             response,
             has_failure_context,
             local_failure_matched,
-            has_warning,
         };
 
         let ai_params = st.ai_provider.clone().map(|provider| AiParams {
@@ -309,27 +298,25 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
         });
 
         let policy = AiTriggerPolicy::new(&st.config.ai);
-        let last_ai_at = st.last_ai_request_at;
+        let decision = policy.evaluate(
+            &req.input,
+            &local,
+            ai_params.is_some(),
+            req.skip_ai,
+            st.last_ai_request_at,
+        );
 
-        (local, ai_params, policy, last_ai_at)
+        if decision == AiDecision::RequestNow {
+            st.last_ai_request_at = Some(std::time::Instant::now());
+        }
+
+        (local, ai_params, decision)
     };
 
-    let result = SuggestionPipeline::suggest(
-        local,
-        ai_params,
-        &policy,
-        &req.input,
-        &req.context,
-        req.skip_ai,
-        last_ai_at,
-    )
-    .await;
+    let response =
+        SuggestionPipeline::execute(local, decision, ai_params, &req.input, &req.context).await;
 
-    if let Some(at) = result.ai_requested_at {
-        state.lock().await.last_ai_request_at = Some(at);
-    }
-
-    Response::Suggest(result.response)
+    Response::Suggest(response)
 }
 
 async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonState>>) -> Response {

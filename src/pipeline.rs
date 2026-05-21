@@ -10,7 +10,6 @@ pub struct LocalResult {
     pub response: SuggestResponse,
     pub has_failure_context: bool,
     pub local_failure_matched: bool,
-    pub has_warning: bool,
 }
 
 pub struct AiParams {
@@ -25,11 +24,6 @@ pub enum AiDecision {
     RequestNow,
     NeedAiOnly,
     Skip,
-}
-
-pub struct PipelineResult {
-    pub response: SuggestResponse,
-    pub ai_requested_at: Option<Instant>,
 }
 
 pub struct AiTriggerPolicy {
@@ -73,7 +67,7 @@ impl AiTriggerPolicy {
     }
 
     fn ai_is_useful(&self, input: &str, local: &LocalResult) -> bool {
-        if local.has_warning {
+        if local.response.warning.is_some() {
             return false;
         }
         if local.has_failure_context && !local.local_failure_matched {
@@ -106,28 +100,19 @@ enum AiTask<'a> {
 pub struct SuggestionPipeline;
 
 impl SuggestionPipeline {
-    pub async fn suggest(
+    pub async fn execute(
         mut local: LocalResult,
+        decision: AiDecision,
         ai_params: Option<AiParams>,
-        policy: &AiTriggerPolicy,
         input: &str,
         context: &RequestContext,
-        skip_ai: bool,
-        last_ai_request_at: Option<Instant>,
-    ) -> PipelineResult {
-        let ai_available = ai_params.is_some();
-        let decision = policy.evaluate(input, &local, ai_available, skip_ai, last_ai_request_at);
-
+    ) -> SuggestResponse {
         local.response.need_ai =
             matches!(decision, AiDecision::RequestNow | AiDecision::NeedAiOnly);
-
-        let mut ai_requested_at = None;
 
         if decision == AiDecision::RequestNow
             && let Some(ref params) = ai_params
         {
-            ai_requested_at = Some(Instant::now());
-
             let task = if local.has_failure_context && !local.local_failure_matched {
                 AiTask::ErrorRecovery { context }
             } else {
@@ -139,10 +124,7 @@ impl SuggestionPipeline {
             }
         }
 
-        PipelineResult {
-            response: local.response,
-            ai_requested_at,
-        }
+        local.response
     }
 
     async fn execute_ai(task: AiTask<'_>, params: &AiParams) -> Option<Suggestion> {
@@ -210,7 +192,7 @@ impl SuggestionPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{SuggestResponse, Suggestion, SuggestionSource};
+    use crate::protocol::{SuggestResponse, Suggestion, SuggestionSource, Warning};
 
     fn make_local(
         candidate_count: usize,
@@ -230,16 +212,22 @@ mod tests {
                 }
             })
             .collect();
+        let warning = if has_warning {
+            Some(Warning {
+                text: "dangerous".into(),
+            })
+        } else {
+            None
+        };
         LocalResult {
             response: SuggestResponse {
                 suggestions,
                 hint: None,
-                warning: None,
+                warning,
                 need_ai: false,
             },
             has_failure_context,
             local_failure_matched,
-            has_warning,
         }
     }
 
