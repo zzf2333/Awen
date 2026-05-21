@@ -69,7 +69,7 @@ async fn main() {
         Commands::Logs { lines } => cmd_logs(lines),
         Commands::Config => cmd_config(),
         Commands::Context => cmd_context().await,
-        Commands::Setup => cmd_setup(),
+        Commands::Setup => cmd_setup().await,
         Commands::History { action } => match action {
             HistoryAction::Import { file, force } => cmd_history_import(file, force),
         },
@@ -224,12 +224,26 @@ fn cmd_history_import(file: Option<PathBuf>, force: bool) {
     }
 }
 
-fn cmd_setup() {
+async fn cmd_setup() {
     let config_dir = config::config_dir();
     let data_dir = config::data_dir();
     std::fs::create_dir_all(&config_dir).ok();
     std::fs::create_dir_all(&data_dir).ok();
 
+    // 1. Generate default config if missing
+    let config_path = config_dir.join("config.toml");
+    if !config_path.exists() {
+        let default = config::AwenConfig::default();
+        let content = toml::to_string_pretty(&default).unwrap();
+        match std::fs::write(&config_path, &content) {
+            Ok(()) => println!("[1/4] config: created {}", config_path.display()),
+            Err(e) => eprintln!("[1/4] config: failed to write {}: {e}", config_path.display()),
+        }
+    } else {
+        println!("[1/4] config: {}", config_path.display());
+    }
+
+    // 2. Find and configure plugin
     let plugin_path = find_plugin().unwrap_or_else(|| {
         eprintln!("error: could not find awen.zsh plugin");
         eprintln!("  checked: <brew_prefix>/share/awen/awen.zsh");
@@ -247,30 +261,61 @@ fn cmd_setup() {
         && let Ok(content) = std::fs::read_to_string(&zshrc)
         && content.contains("awen.zsh")
     {
-        println!("awen is already configured in {}", zshrc.display());
-        println!("  plugin: {}", plugin_path.display());
-        return;
+        println!("[2/4] shell: already configured in {}", zshrc.display());
+    } else {
+        let source_line = format!(
+            "\n# Awen — Terminal Intelligence Layer\nsource {}\n",
+            plugin_path.display()
+        );
+        if let Err(e) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&zshrc)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, source_line.as_bytes()))
+        {
+            eprintln!("error: failed to write to {}: {e}", zshrc.display());
+            std::process::exit(1);
+        }
+        println!("[2/4] shell: added source line to {}", zshrc.display());
     }
 
-    let source_line = format!(
-        "\n# Awen — Terminal Intelligence Layer\nsource {}\n",
-        plugin_path.display()
-    );
-    if let Err(e) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&zshrc)
-        .and_then(|mut f| std::io::Write::write_all(&mut f, source_line.as_bytes()))
-    {
-        eprintln!("error: failed to write to {}: {e}", zshrc.display());
-        std::process::exit(1);
+    // 3. Restart daemon (stop old, start new)
+    if daemon::is_running() {
+        daemon::send_shutdown().await.ok();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        if daemon::is_running() {
+            if let Some(pid) = daemon::read_pid() {
+                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                daemon::cleanup_socket();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
     }
 
-    println!("awen setup complete!");
-    println!("  plugin: {}", plugin_path.display());
-    println!("  added source line to {}", zshrc.display());
+    let exe = std::env::current_exe().unwrap_or_else(|_| "awen".into());
+    match std::process::Command::new(&exe).arg("start").spawn() {
+        Ok(_) => {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            println!("[3/4] daemon: started");
+        }
+        Err(e) => {
+            eprintln!("[3/4] daemon: failed to start: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    // 4. Verify
+    match daemon::send_status_request().await {
+        Ok(protocol::Response::Status(s)) => {
+            println!("[4/4] status: pid {}, {} history entries", s.pid, s.history_count);
+        }
+        _ => {
+            println!("[4/4] status: daemon running (could not query details)");
+        }
+    }
+
     println!();
-    println!("restart your shell or run: source ~/.zshrc");
+    println!("awen setup complete! restart your shell or run: source ~/.zshrc");
 }
 
 fn find_plugin() -> Option<PathBuf> {
