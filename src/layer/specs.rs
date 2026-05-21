@@ -84,6 +84,11 @@ impl SpecsLayer {
             "node",
             // Package managers & build tools
             "pip",
+            "pnpm",
+            "yarn",
+            "bun",
+            "uv",
+            "poetry",
             "cmake",
             "make",
             // AI tools
@@ -137,6 +142,11 @@ impl SpecsLayer {
             // Terminal multiplexers
             "tmux",
             "screen",
+            // Testing & linting
+            "pytest",
+            "ruff",
+            // Task runners
+            "just",
             // Database CLIs
             "psql",
             "mysql",
