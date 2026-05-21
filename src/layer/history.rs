@@ -70,18 +70,19 @@ impl HistoryLayer {
 
         let mut stmt = conn
             .prepare(
-                "SELECT command, cwd, timestamp, count FROM commands
+                "SELECT command, cwd, timestamp, count, exit_code FROM commands
                  ORDER BY timestamp DESC LIMIT 500",
             )
             .unwrap();
 
-        let rows: Vec<(String, String, i64, i64)> = stmt
+        let rows: Vec<(String, String, i64, i64, i32)> = stmt
             .query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, i64>(3)?,
+                    row.get::<_, i32>(4)?,
                 ))
             })
             .unwrap()
@@ -100,7 +101,7 @@ impl HistoryLayer {
         let input_first_word = input_lower.split_whitespace().next().unwrap_or("");
         let has_space = input.contains(' ');
 
-        for (command, cmd_cwd, timestamp, count) in &rows {
+        for (command, cmd_cwd, timestamp, count, exit_code) in &rows {
             if short_input && !command.to_lowercase().starts_with(&input_lower) {
                 continue;
             }
@@ -122,12 +123,14 @@ impl HistoryLayer {
                 let frequency_boost = (*count as f64).ln().max(1.0);
                 let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
                 let prefix_bonus = if command.starts_with(input) { 3.0 } else { 1.0 };
+                let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
 
                 let score = match_score as f64
                     * recency_decay
                     * frequency_boost
                     * dir_affinity
-                    * prefix_bonus;
+                    * prefix_bonus
+                    * failure_penalty;
                 scored.push((score, command.clone()));
             }
         }
@@ -157,18 +160,19 @@ impl HistoryLayer {
 
         let mut stmt = conn
             .prepare(
-                "SELECT command, cwd, timestamp, count FROM commands
+                "SELECT command, cwd, timestamp, count, exit_code FROM commands
                  ORDER BY timestamp DESC LIMIT 200",
             )
             .unwrap();
 
-        let rows: Vec<(String, String, i64, i64)> = stmt
+        let rows: Vec<(String, String, i64, i64, i32)> = stmt
             .query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, i64>(3)?,
+                    row.get::<_, i32>(4)?,
                 ))
             })
             .unwrap()
@@ -178,13 +182,14 @@ impl HistoryLayer {
         let now = chrono::Utc::now().timestamp();
         let mut scored: Vec<(f64, String)> = Vec::new();
 
-        for (command, cmd_cwd, timestamp, count) in &rows {
+        for (command, cmd_cwd, timestamp, count, exit_code) in &rows {
             let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
             let recency = 1.0 / age_hours.ln().max(1.0);
             let frequency = (*count as f64).ln().max(1.0);
             let dir_affinity = if cmd_cwd == cwd { 3.0 } else { 1.0 };
+            let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
 
-            let score = recency * frequency * dir_affinity;
+            let score = recency * frequency * dir_affinity * failure_penalty;
             scored.push((score, command.clone()));
         }
 
