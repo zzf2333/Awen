@@ -47,12 +47,6 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 brew install zzf2333/tap/awen
 ```
 
-Then add to your `~/.zshrc`:
-
-```bash
-source $(brew --prefix)/share/awen/awen.zsh
-```
-
 ### Shell Script
 
 ```bash

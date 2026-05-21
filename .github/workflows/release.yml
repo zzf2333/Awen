@@ -154,13 +154,34 @@ jobs:
               (share/"awen").install "awen.zsh"
             end
 
+            def post_install
+              config_dir = Pathname.new("#{Dir.home}/.config/awen")
+              config_dir.mkpath
+              data_dir = Pathname.new("#{Dir.home}/.local/share/awen")
+              data_dir.mkpath
+
+              plugin_dest = config_dir/"awen.zsh"
+              plugin_dest.unlink if plugin_dest.symlink? || plugin_dest.exist?
+              plugin_dest.make_symlink(opt_share/"awen/awen.zsh")
+
+              zshrc = Pathname.new("#{Dir.home}/.zshrc")
+              return unless zshrc.exist?
+              return if zshrc.read.include?("awen.zsh")
+
+              zshrc.open("a") do |f|
+                f.puts ""
+                f.puts "# Awen — Terminal Intelligence Layer"
+                f.puts "source #{config_dir}/awen.zsh"
+              end
+            end
+
             def caveats
               <<~EOS
-                To activate Awen, add this to your ~/.zshrc:
+                Awen has been configured automatically:
+                  - Plugin symlinked to ~/.config/awen/awen.zsh
+                  - Source line added to ~/.zshrc (if not already present)
 
-                  source #{opt_share}/awen/awen.zsh
-
-                Then restart your shell or run: source ~/.zshrc
+                Restart your shell or run: source ~/.zshrc
 
                 Optional dependencies for best performance:
                   brew install jq     # More robust JSON handling
