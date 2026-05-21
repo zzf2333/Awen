@@ -34,6 +34,7 @@ typeset -g _AWEN_LAST_LOCAL_MS=0
 
 # NL mode state
 typeset -g _AWEN_NL_MODE=0
+typeset -g _AWEN_FAILURE_SHOWN=0
 
 # Menu state
 typeset -g  _AWEN_MENU_ACTIVE=0
@@ -1133,9 +1134,9 @@ _awen_precmd() {
 # Hook: before each command runs
 _awen_preexec() {
     _AWEN_LAST_COMMAND="$1"
+    _AWEN_FAILURE_SHOWN=0
     : > "$_AWEN_LAST_STDERR_FILE"
-    # Stderr capture is experimental — opt-in via AWEN_CAPTURE_STDERR=1
-    if [[ "${AWEN_CAPTURE_STDERR:-0}" == "1" ]]; then
+    if [[ "${AWEN_CAPTURE_STDERR:-1}" == "1" ]]; then
         exec {_AWEN_STDERR_BACKUP}>&2
         exec 2> >(tee "$_AWEN_LAST_STDERR_FILE" >&${_AWEN_STDERR_BACKUP})
     fi
@@ -1323,7 +1324,13 @@ awen_init() {
     add-zsh-hook preexec _awen_preexec
 
     _awen_line_init() {
-        :
+        if (( ! _AWEN_FAILURE_SHOWN )) \
+            && [[ -n "$_AWEN_LAST_EXIT_CODE" && "$_AWEN_LAST_EXIT_CODE" -ne 0 ]] \
+            && [[ -s "$_AWEN_LAST_STDERR_FILE" ]] \
+            && [[ -z "$BUFFER" ]]; then
+            _AWEN_FAILURE_SHOWN=1
+            _awen_suggest_next
+        fi
     }
     zle -N zle-line-init _awen_line_init
 }

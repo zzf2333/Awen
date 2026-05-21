@@ -178,6 +178,21 @@ fn builtin_patterns() -> Vec<FailurePattern> {
             "cargo search {1}",
             "Package `{1}` not found",
         ),
+        (
+            r"could not find `Cargo\.toml` in `(\S+)`",
+            "find . -name Cargo.toml -maxdepth 3",
+            "No Cargo.toml in `{1}` — wrong directory?",
+        ),
+        (
+            r"(\w+): illegal option -- (\w)",
+            "{1} --help",
+            "Invalid flag `-{2}` for `{1}`",
+        ),
+        (
+            r"(\w[\w-]*): unrecognized option '(-{1,2}\S+)'",
+            "{1} --help",
+            "Unknown option `{2}` for `{1}`",
+        ),
     ];
 
     raw.into_iter()
@@ -268,6 +283,39 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("cannot find crate `tokio`", 0);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_missing_cargo_toml() {
+        let layer = FailureLayer::new();
+        let result = layer.match_failure(
+            "error: could not find `Cargo.toml` in `/Users/saonian` or any parent directory",
+            101,
+        );
+        assert!(result.is_some());
+        let (suggestion, hint) = result.unwrap();
+        assert_eq!(suggestion.text, "find . -name Cargo.toml -maxdepth 3");
+        assert_eq!(hint.text, "No Cargo.toml in `/Users/saonian` — wrong directory?");
+    }
+
+    #[test]
+    fn test_illegal_option() {
+        let layer = FailureLayer::new();
+        let result = layer.match_failure("find: illegal option -- n", 1);
+        assert!(result.is_some());
+        let (suggestion, hint) = result.unwrap();
+        assert_eq!(suggestion.text, "find --help");
+        assert_eq!(hint.text, "Invalid flag `-n` for `find`");
+    }
+
+    #[test]
+    fn test_unrecognized_option() {
+        let layer = FailureLayer::new();
+        let result = layer.match_failure("grep: unrecognized option '--colour'", 2);
+        assert!(result.is_some());
+        let (suggestion, hint) = result.unwrap();
+        assert_eq!(suggestion.text, "grep --help");
+        assert_eq!(hint.text, "Unknown option `--colour` for `grep`");
     }
 
     #[test]
