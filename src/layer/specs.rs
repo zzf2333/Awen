@@ -78,6 +78,10 @@ impl SpecsLayer {
             "gh",
             "kubectl",
             "terraform",
+            "aws",
+            "gcloud",
+            "az",
+            "helm",
             // Languages & runtimes
             "python",
             "go",
