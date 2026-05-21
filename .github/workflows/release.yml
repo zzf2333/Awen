@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            cross: false
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            cross: false
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: true
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Codesign (macOS)
+        if: runner.os == 'macOS'
+        run: codesign -fs - target/${{ matrix.target }}/release/awen
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="awen-${VERSION}-${{ matrix.target }}"
+          mkdir -p "${ARCHIVE}"
+          cp "target/${{ matrix.target }}/release/awen" "${ARCHIVE}/"
+          cp plugin/awen.zsh "${ARCHIVE}/"
+          cp LICENSE "${ARCHIVE}/"
+          tar czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
+          shasum -a 256 "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: awen-${{ matrix.target }}
+          path: |
+            awen-*.tar.gz
+            awen-*.tar.gz.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: cat *.sha256 > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            awen-*.tar.gz
+            SHA256SUMS
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    if: "!contains(github.ref_name, '-rc')"
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Update Homebrew formula
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          SHA_ARM64_DARWIN=$(grep "aarch64-apple-darwin" *.sha256 | awk '{print $1}')
+          SHA_X86_64_DARWIN=$(grep "x86_64-apple-darwin" *.sha256 | awk '{print $1}')
+          SHA_X86_64_LINUX=$(grep "x86_64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
+          SHA_ARM64_LINUX=$(grep "aarch64-unknown-linux-gnu" *.sha256 | awk '{print $1}')
+
+          git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/zzf2333/homebrew-tap.git"
+          cd homebrew-tap
+
+          mkdir -p Formula
+
+          cat > Formula/awen.rb << RUBY
+          class Awen < Formula
+            desc "Terminal Intelligence Layer - Smart when you need it, silent when you don't"
+            homepage "https://github.com/zzf2333/Awen"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/zzf2333/Awen/releases/download/v${VERSION}/awen-${VERSION}-aarch64-apple-darwin.tar.gz"
+                sha256 "${SHA_ARM64_DARWIN}"
+              end
+              on_intel do
+                url "https://github.com/zzf2333/Awen/releases/download/v${VERSION}/awen-${VERSION}-x86_64-apple-darwin.tar.gz"
+                sha256 "${SHA_X86_64_DARWIN}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/zzf2333/Awen/releases/download/v${VERSION}/awen-${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA_ARM64_LINUX}"
+              end
+              on_intel do
+                url "https://github.com/zzf2333/Awen/releases/download/v${VERSION}/awen-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA_X86_64_LINUX}"
+              end
+            end
+
+            def install
+              bin.install "awen"
+              (share/"awen").install "awen.zsh"
+            end
+
+            def caveats
+              <<~EOS
+                To activate Awen, add this to your ~/.zshrc:
+
+                  source #{opt_share}/awen/awen.zsh
+
+                Then restart your shell or run: source ~/.zshrc
+
+                Optional dependencies for best performance:
+                  brew install jq     # More robust JSON handling
+                  brew install socat  # Faster socket communication
+              EOS
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/awen --version")
+            end
+          end
+          RUBY
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Formula/awen.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/awen.rb
+          git commit -m "awen ${VERSION}"
+          git push
