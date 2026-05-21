@@ -845,6 +845,8 @@ _awen_suggest_next() {
     [[ -z "$response" ]] && return
 
     _awen_apply_response "$response"
+
+    [[ "$_AWEN_NEED_AI" != "false" ]] && _awen_schedule_ai
 }
 
 # Phase 1: Synchronous local-only suggest (<20ms)
@@ -897,7 +899,14 @@ _awen_cancel_pending_ai() {
 _awen_schedule_ai() {
     _awen_cancel_pending_ai
 
-    [[ ${#BUFFER} -lt 2 ]] && return
+    local is_error_recovery=0
+    if [[ -z "$BUFFER" && -n "$_AWEN_LAST_EXIT_CODE" && "$_AWEN_LAST_EXIT_CODE" -ne 0 ]]; then
+        is_error_recovery=1
+    fi
+
+    if (( ! is_error_recovery )); then
+        [[ ${#BUFFER} -lt 2 ]] && return
+    fi
     [[ ! -S "$_AWEN_SOCKET" ]] && return
     command -v socat &>/dev/null || return
 
@@ -943,7 +952,7 @@ _awen_check_ai_result() {
     : > "$_AWEN_AI_RESULT_FILE"
     [[ -z "$response" ]] && return
 
-    if [[ -n "$_AWEN_AI_SNAPSHOT" && "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]]; then
+    if [[ "$BUFFER" != "$_AWEN_AI_SNAPSHOT" ]]; then
         return
     fi
 
