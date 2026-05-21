@@ -5,7 +5,7 @@
   <a href="https://github.com/zzf2333/Awen/releases"><img src="https://img.shields.io/github/v/tag/zzf2333/Awen?label=version&style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/zzf2333/Awen/stargazers"><img src="https://img.shields.io/github/stars/zzf2333/Awen?style=flat-square" alt="Stars"></a>
-
+  <br/>
   <a href="README.md">English</a>
 </div>
 
