@@ -71,7 +71,13 @@ impl HistoryLayer {
         Ok(())
     }
 
-    pub fn suggest(&self, input: &str, cwd: &str, last_command: Option<&str>, limit: usize) -> Vec<Suggestion> {
+    pub fn suggest(
+        &self,
+        input: &str,
+        cwd: &str,
+        last_command: Option<&str>,
+        limit: usize,
+    ) -> Vec<Suggestion> {
         if input.is_empty() {
             return Vec::new();
         }
@@ -109,7 +115,11 @@ impl HistoryLayer {
 
         let input_lower = input.to_lowercase();
         let short_input = input.len() <= 3;
-        let min_score: u32 = if short_input { SHORT_INPUT_MIN_SCORE } else { LONG_INPUT_MIN_SCORE };
+        let min_score: u32 = if short_input {
+            SHORT_INPUT_MIN_SCORE
+        } else {
+            LONG_INPUT_MIN_SCORE
+        };
         let input_first_word = input_lower.split_whitespace().next().unwrap_or("");
         let has_space = input.contains(' ');
 
@@ -133,10 +143,26 @@ impl HistoryLayer {
                 let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
                 let recency_decay = 1.0 / age_hours.ln().max(1.0);
                 let frequency_boost = (*count as f64).ln().max(1.0);
-                let dir_affinity = if cmd_cwd == cwd { DIR_AFFINITY_SUGGEST } else { 1.0 };
-                let prefix_bonus = if command.starts_with(input) { PREFIX_BONUS } else { 1.0 };
-                let failure_penalty = if *exit_code != 0 { FAILURE_PENALTY } else { 1.0 };
-                let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { LAST_CMD_PENALTY } else { 1.0 };
+                let dir_affinity = if cmd_cwd == cwd {
+                    DIR_AFFINITY_SUGGEST
+                } else {
+                    1.0
+                };
+                let prefix_bonus = if command.starts_with(input) {
+                    PREFIX_BONUS
+                } else {
+                    1.0
+                };
+                let failure_penalty = if *exit_code != 0 {
+                    FAILURE_PENALTY
+                } else {
+                    1.0
+                };
+                let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) {
+                    LAST_CMD_PENALTY
+                } else {
+                    1.0
+                };
 
                 let score = match_score as f64
                     * recency_decay
@@ -166,7 +192,12 @@ impl HistoryLayer {
             .collect()
     }
 
-    pub fn suggest_next(&self, cwd: &str, last_command: Option<&str>, limit: usize) -> Vec<Suggestion> {
+    pub fn suggest_next(
+        &self,
+        cwd: &str,
+        last_command: Option<&str>,
+        limit: usize,
+    ) -> Vec<Suggestion> {
         let conn = match Connection::open(&self.db_path) {
             Ok(c) => c,
             Err(_) => return Vec::new(),
@@ -199,9 +230,21 @@ impl HistoryLayer {
             let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
             let recency = 1.0 / age_hours.ln().max(1.0);
             let frequency = (*count as f64).ln().max(1.0);
-            let dir_affinity = if cmd_cwd == cwd { DIR_AFFINITY_NEXT } else { 1.0 };
-            let failure_penalty = if *exit_code != 0 { FAILURE_PENALTY } else { 1.0 };
-            let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { LAST_CMD_PENALTY } else { 1.0 };
+            let dir_affinity = if cmd_cwd == cwd {
+                DIR_AFFINITY_NEXT
+            } else {
+                1.0
+            };
+            let failure_penalty = if *exit_code != 0 {
+                FAILURE_PENALTY
+            } else {
+                1.0
+            };
+            let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) {
+                LAST_CMD_PENALTY
+            } else {
+                1.0
+            };
 
             let score = recency * frequency * dir_affinity * failure_penalty * last_cmd_penalty;
             scored.push((score, command.clone()));

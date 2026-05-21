@@ -295,7 +295,10 @@ mod tests {
         assert!(result.is_some());
         let (suggestion, hint) = result.unwrap();
         assert_eq!(suggestion.text, "find . -name Cargo.toml -maxdepth 3");
-        assert_eq!(hint.text, "No Cargo.toml in `/Users/saonian` — wrong directory?");
+        assert_eq!(
+            hint.text,
+            "No Cargo.toml in `/Users/saonian` — wrong directory?"
+        );
     }
 
     #[test]

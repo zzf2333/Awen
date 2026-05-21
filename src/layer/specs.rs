@@ -514,10 +514,14 @@ description = "human sizes"
         let mut loaded_names: Vec<String> = layer.specs.keys().cloned().collect();
         loaded_names.sort();
 
-        let missing_in_code: Vec<&String> =
-            toml_names.iter().filter(|n| !loaded_names.contains(n)).collect();
-        let missing_toml: Vec<&String> =
-            loaded_names.iter().filter(|n| !toml_names.contains(n)).collect();
+        let missing_in_code: Vec<&String> = toml_names
+            .iter()
+            .filter(|n| !loaded_names.contains(n))
+            .collect();
+        let missing_toml: Vec<&String> = loaded_names
+            .iter()
+            .filter(|n| !toml_names.contains(n))
+            .collect();
 
         assert!(
             missing_in_code.is_empty() && missing_toml.is_empty(),
