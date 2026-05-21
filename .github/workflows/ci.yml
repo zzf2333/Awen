@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check install.sh
         run: shellcheck install.sh
+      - name: Check install-remote.sh
+        run: shellcheck install-remote.sh
       - name: Check zsh plugin syntax
         run: zsh -n plugin/awen.zsh
       - name: Run zsh smoke tests
