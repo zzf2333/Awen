@@ -137,7 +137,7 @@ session_history_size = 20       # 会话记忆的命令数量
 stderr_max_chars = 500          # stderr 截断长度
 repo_detect = true              # 自动检测项目类型
 git_context = true              # 采集 Git 上下文
-capture_stderr = false          # 实验性：捕获 stderr 用于失败修复
+capture_stderr = true           # 捕获 stderr 用于失败修复
 
 [ui]
 ghost_text_color = 242          # ghost text 颜色 (ANSI 256)
@@ -234,8 +234,21 @@ warning = "This will force-execute, are you sure?"
 |------|--------|------|
 | `AWEN_AI_DELAY` | `1` | 停止输入后等待多少秒再发起 AI 请求 |
 | `AWEN_LOCAL_THROTTLE_MS` | `20` | 本地建议请求的最小间隔（毫秒，按键节流） |
-| `AWEN_CAPTURE_STDERR` | `0` | 设为 `1` 启用实验性 stderr 捕获 |
+| `AWEN_CAPTURE_STDERR` | `1` | 设为 `0` 禁用 stderr 捕获 |
+| `AWEN_STDERR_MAX_CHARS` | `500` | 发送给 daemon 的最大 stderr 字节数 |
 | `AWEN_ENABLE_KEYBIND_OVERRIDE` | `1` | 设为 `0` 禁用 Awen 快捷键覆盖 |
+| `AWEN_GHOST_STYLE` | `fg=244` | Ghost text 样式（zsh highlight 格式） |
+| `AWEN_STYLE_DIM` | `fg=244` | 暗淡文本样式 |
+| `AWEN_STYLE_MUTED` | `fg=250` | 柔和文本样式 |
+| `AWEN_STYLE_TEXT` | `fg=255` | 正常文本样式 |
+| `AWEN_STYLE_SELECTED` | `fg=255,bold,bg=236` | 选中项样式 |
+| `AWEN_STYLE_PANEL` | `fg=240` | 面板边框样式 |
+| `AWEN_STYLE_PANEL_BG` | `bg=234` | 面板背景样式 |
+| `AWEN_STYLE_HISTORY` | `fg=146` | History 来源标签颜色 |
+| `AWEN_STYLE_SPEC` | `fg=69` | Spec 来源标签颜色 |
+| `AWEN_STYLE_AI` | `fg=177` | AI 来源标签颜色 |
+| `AWEN_STYLE_RISK` | `fg=220` | 风险警告颜色 |
+| `AWEN_STYLE_FIX` | `fg=108` | 修复建议颜色 |
 | `DEEPSEEK_API_KEY` | — | DeepSeek API 密钥（替代配置文件） |
 
 ## 安全边界

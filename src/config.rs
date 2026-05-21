@@ -103,7 +103,7 @@ impl Default for ContextConfig {
             stderr_max_chars: 500,
             repo_detect: true,
             git_context: true,
-            capture_stderr: false,
+            capture_stderr: true,
         }
     }
 }
@@ -210,7 +210,7 @@ mod tests {
         assert_eq!(config.ai.min_local_candidates, 2);
         assert!((config.ai.min_local_confidence - 0.6).abs() < f64::EPSILON);
         assert_eq!(config.context.session_history_size, 20);
-        assert!(!config.context.capture_stderr);
+        assert!(config.context.capture_stderr);
         assert_eq!(config.ui.ghost_text_color, 242);
         assert!(!config.ui.command_explanation);
     }

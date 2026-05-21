@@ -5,6 +5,19 @@ use nucleo_matcher::{Config, Matcher};
 use rusqlite::{Connection, params};
 use std::path::{Path, PathBuf};
 
+const MAX_COMMAND_LENGTH: usize = 500;
+const SUGGEST_QUERY_LIMIT: usize = 500;
+const SUGGEST_NEXT_QUERY_LIMIT: usize = 200;
+const SHORT_INPUT_MIN_SCORE: u32 = 50;
+const LONG_INPUT_MIN_SCORE: u32 = 40;
+const DIR_AFFINITY_SUGGEST: f64 = 1.5;
+const DIR_AFFINITY_NEXT: f64 = 3.0;
+const PREFIX_BONUS: f64 = 3.0;
+const FAILURE_PENALTY: f64 = 0.3;
+const LAST_CMD_PENALTY: f64 = 0.1;
+const NEXT_CONFIDENCE_SCALE: f64 = 0.5;
+const NEXT_CONFIDENCE_CAP: f64 = 0.5;
+
 pub fn is_sensitive_command(command: &str) -> bool {
     SENSITIVE_VALUE_RE.is_match(command) || SENSITIVE_COMMAND_RE.is_match(command)
 }
@@ -37,7 +50,7 @@ impl HistoryLayer {
 
     pub fn record(&self, command: &str, cwd: &str, exit_code: i32) -> Result<(), rusqlite::Error> {
         let trimmed = command.trim();
-        if trimmed.is_empty() || trimmed.len() > 500 {
+        if trimmed.is_empty() || trimmed.len() > MAX_COMMAND_LENGTH {
             return Ok(());
         }
         if is_sensitive_command(command) {
@@ -68,12 +81,11 @@ impl HistoryLayer {
             Err(_) => return Vec::new(),
         };
 
-        let mut stmt = conn
-            .prepare(
-                "SELECT command, cwd, timestamp, count, exit_code FROM commands
-                 ORDER BY timestamp DESC LIMIT 500",
-            )
-            .unwrap();
+        let query = format!(
+            "SELECT command, cwd, timestamp, count, exit_code FROM commands
+             ORDER BY timestamp DESC LIMIT {SUGGEST_QUERY_LIMIT}"
+        );
+        let mut stmt = conn.prepare(&query).unwrap();
 
         let rows: Vec<(String, String, i64, i64, i32)> = stmt
             .query_map([], |row| {
@@ -97,7 +109,7 @@ impl HistoryLayer {
 
         let input_lower = input.to_lowercase();
         let short_input = input.len() <= 3;
-        let min_score: u32 = if short_input { 50 } else { 40 };
+        let min_score: u32 = if short_input { SHORT_INPUT_MIN_SCORE } else { LONG_INPUT_MIN_SCORE };
         let input_first_word = input_lower.split_whitespace().next().unwrap_or("");
         let has_space = input.contains(' ');
 
@@ -121,10 +133,10 @@ impl HistoryLayer {
                 let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
                 let recency_decay = 1.0 / age_hours.ln().max(1.0);
                 let frequency_boost = (*count as f64).ln().max(1.0);
-                let dir_affinity = if cmd_cwd == cwd { 1.5 } else { 1.0 };
-                let prefix_bonus = if command.starts_with(input) { 3.0 } else { 1.0 };
-                let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
-                let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { 0.1 } else { 1.0 };
+                let dir_affinity = if cmd_cwd == cwd { DIR_AFFINITY_SUGGEST } else { 1.0 };
+                let prefix_bonus = if command.starts_with(input) { PREFIX_BONUS } else { 1.0 };
+                let failure_penalty = if *exit_code != 0 { FAILURE_PENALTY } else { 1.0 };
+                let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { LAST_CMD_PENALTY } else { 1.0 };
 
                 let score = match_score as f64
                     * recency_decay
@@ -160,12 +172,11 @@ impl HistoryLayer {
             Err(_) => return Vec::new(),
         };
 
-        let mut stmt = conn
-            .prepare(
-                "SELECT command, cwd, timestamp, count, exit_code FROM commands
-                 ORDER BY timestamp DESC LIMIT 200",
-            )
-            .unwrap();
+        let query = format!(
+            "SELECT command, cwd, timestamp, count, exit_code FROM commands
+             ORDER BY timestamp DESC LIMIT {SUGGEST_NEXT_QUERY_LIMIT}"
+        );
+        let mut stmt = conn.prepare(&query).unwrap();
 
         let rows: Vec<(String, String, i64, i64, i32)> = stmt
             .query_map([], |row| {
@@ -188,9 +199,9 @@ impl HistoryLayer {
             let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
             let recency = 1.0 / age_hours.ln().max(1.0);
             let frequency = (*count as f64).ln().max(1.0);
-            let dir_affinity = if cmd_cwd == cwd { 3.0 } else { 1.0 };
-            let failure_penalty = if *exit_code != 0 { 0.3 } else { 1.0 };
-            let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { 0.1 } else { 1.0 };
+            let dir_affinity = if cmd_cwd == cwd { DIR_AFFINITY_NEXT } else { 1.0 };
+            let failure_penalty = if *exit_code != 0 { FAILURE_PENALTY } else { 1.0 };
+            let last_cmd_penalty = if last_command.is_some_and(|lc| lc == command) { LAST_CMD_PENALTY } else { 1.0 };
 
             let score = recency * frequency * dir_affinity * failure_penalty * last_cmd_penalty;
             scored.push((score, command.clone()));
@@ -207,7 +218,7 @@ impl HistoryLayer {
             .map(|(score, text)| Suggestion {
                 text,
                 source: SuggestionSource::History,
-                confidence: (score / max_score * 0.5).min(0.5),
+                confidence: (score / max_score * NEXT_CONFIDENCE_SCALE).min(NEXT_CONFIDENCE_CAP),
                 description: None,
             })
             .collect()

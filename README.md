@@ -137,7 +137,7 @@ session_history_size = 20       # Number of commands to remember in session
 stderr_max_chars = 500          # Max stderr length to capture
 repo_detect = true              # Auto-detect project type
 git_context = true              # Collect Git context
-capture_stderr = false          # Experimental: capture stderr for failure recovery
+capture_stderr = true           # Capture stderr for failure recovery
 
 [ui]
 ghost_text_color = 242          # Ghost text color (ANSI 256)
@@ -234,8 +234,21 @@ warning = "This will force-execute, are you sure?"
 |----------|---------|-------------|
 | `AWEN_AI_DELAY` | `1` | Seconds to wait after typing stops before firing an AI request |
 | `AWEN_LOCAL_THROTTLE_MS` | `20` | Minimum ms between local suggestion requests (keystroke throttle) |
-| `AWEN_CAPTURE_STDERR` | `0` | Set to `1` to enable experimental stderr capture |
+| `AWEN_CAPTURE_STDERR` | `1` | Set to `0` to disable stderr capture |
+| `AWEN_STDERR_MAX_CHARS` | `500` | Max bytes of stderr to send to daemon |
 | `AWEN_ENABLE_KEYBIND_OVERRIDE` | `1` | Set to `0` to disable Awen's keybinding overrides |
+| `AWEN_GHOST_STYLE` | `fg=244` | Ghost text style (zsh highlight spec) |
+| `AWEN_STYLE_DIM` | `fg=244` | Dim text style |
+| `AWEN_STYLE_MUTED` | `fg=250` | Muted text style |
+| `AWEN_STYLE_TEXT` | `fg=255` | Normal text style |
+| `AWEN_STYLE_SELECTED` | `fg=255,bold,bg=236` | Selected item style |
+| `AWEN_STYLE_PANEL` | `fg=240` | Panel border style |
+| `AWEN_STYLE_PANEL_BG` | `bg=234` | Panel background style |
+| `AWEN_STYLE_HISTORY` | `fg=146` | History source tag color |
+| `AWEN_STYLE_SPEC` | `fg=69` | Spec source tag color |
+| `AWEN_STYLE_AI` | `fg=177` | AI source tag color |
+| `AWEN_STYLE_RISK` | `fg=220` | Risk warning color |
+| `AWEN_STYLE_FIX` | `fg=108` | Fix suggestion color |
 | `DEEPSEEK_API_KEY` | — | DeepSeek API key (alternative to config file) |
 
 ## Safety Boundary

@@ -491,4 +491,39 @@ description = "human sizes"
         assert!(!results.iter().any(|s| s.text == "--other-only"));
         assert!(results.iter().any(|s| s.text == "--current-os"));
     }
+
+    #[test]
+    fn test_builtin_specs_match_toml_files() {
+        let specs_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("specs");
+        let mut toml_names: Vec<String> = std::fs::read_dir(&specs_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let path = e.path();
+                if path.extension().is_some_and(|ext| ext == "toml") {
+                    path.file_stem().map(|s| s.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        toml_names.sort();
+
+        let mut layer = SpecsLayer::new();
+        layer.load_builtin_specs();
+        let mut loaded_names: Vec<String> = layer.specs.keys().cloned().collect();
+        loaded_names.sort();
+
+        let missing_in_code: Vec<&String> =
+            toml_names.iter().filter(|n| !loaded_names.contains(n)).collect();
+        let missing_toml: Vec<&String> =
+            loaded_names.iter().filter(|n| !toml_names.contains(n)).collect();
+
+        assert!(
+            missing_in_code.is_empty() && missing_toml.is_empty(),
+            "specs/*.toml and builtin list are out of sync.\n\
+             Files missing from builtin list: {missing_in_code:?}\n\
+             Builtin entries missing .toml file: {missing_toml:?}"
+        );
+    }
 }

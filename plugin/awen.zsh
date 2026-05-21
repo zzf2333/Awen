@@ -9,18 +9,18 @@ typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
-typeset -g _AWEN_GHOST_STYLE="fg=244"
-typeset -g _AWEN_STYLE_DIM="fg=244"
-typeset -g _AWEN_STYLE_MUTED="fg=250"
-typeset -g _AWEN_STYLE_TEXT="fg=255"
-typeset -g _AWEN_STYLE_SELECTED="fg=255,bold,bg=236"
-typeset -g _AWEN_STYLE_PANEL="fg=240"
-typeset -g _AWEN_STYLE_PANEL_BG="bg=234"
-typeset -g _AWEN_STYLE_HISTORY="fg=146"
-typeset -g _AWEN_STYLE_SPEC="fg=69"
-typeset -g _AWEN_STYLE_AI="fg=177"
-typeset -g _AWEN_STYLE_RISK="fg=220"
-typeset -g _AWEN_STYLE_FIX="fg=108"
+typeset -g _AWEN_GHOST_STYLE="${AWEN_GHOST_STYLE:-fg=244}"
+typeset -g _AWEN_STYLE_DIM="${AWEN_STYLE_DIM:-fg=244}"
+typeset -g _AWEN_STYLE_MUTED="${AWEN_STYLE_MUTED:-fg=250}"
+typeset -g _AWEN_STYLE_TEXT="${AWEN_STYLE_TEXT:-fg=255}"
+typeset -g _AWEN_STYLE_SELECTED="${AWEN_STYLE_SELECTED:-fg=255,bold,bg=236}"
+typeset -g _AWEN_STYLE_PANEL="${AWEN_STYLE_PANEL:-fg=240}"
+typeset -g _AWEN_STYLE_PANEL_BG="${AWEN_STYLE_PANEL_BG:-bg=234}"
+typeset -g _AWEN_STYLE_HISTORY="${AWEN_STYLE_HISTORY:-fg=146}"
+typeset -g _AWEN_STYLE_SPEC="${AWEN_STYLE_SPEC:-fg=69}"
+typeset -g _AWEN_STYLE_AI="${AWEN_STYLE_AI:-fg=177}"
+typeset -g _AWEN_STYLE_RISK="${AWEN_STYLE_RISK:-fg=220}"
+typeset -g _AWEN_STYLE_FIX="${AWEN_STYLE_FIX:-fg=108}"
 
 # Async AI state
 typeset -g _AWEN_AI_PID=""
@@ -47,6 +47,7 @@ typeset -ga _AWEN_MENU_FULL_CMDS=()
 typeset -g  _AWEN_MENU_COUNT=0
 typeset -g  _AWEN_MENU_MAX="${AWEN_MENU_MAX_ITEMS:-5}"
 typeset -g  _AWEN_MENU_ENABLED="${AWEN_MENU_ENABLED:-1}"
+typeset -g  _AWEN_STDERR_MAX="${AWEN_STDERR_MAX_CHARS:-500}"
 
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
@@ -739,7 +740,7 @@ _awen_build_context_json() {
     local last_exit="${_AWEN_LAST_EXIT_CODE:-0}"
     local last_stderr=""
     if [[ -f "$_AWEN_LAST_STDERR_FILE" ]]; then
-        last_stderr=$(head -c 500 "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
+        last_stderr=$(head -c $_AWEN_STDERR_MAX "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
     fi
 
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
@@ -1259,7 +1260,7 @@ _awen_precmd() {
     if [[ -n "$_AWEN_LAST_COMMAND" && -S "$_AWEN_SOCKET" ]]; then
         local stderr_content=""
         if [[ -f "$_AWEN_LAST_STDERR_FILE" && -s "$_AWEN_LAST_STDERR_FILE" ]]; then
-            stderr_content=$(head -c 500 "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
+            stderr_content=$(head -c $_AWEN_STDERR_MAX "$_AWEN_LAST_STDERR_FILE" 2>/dev/null | tr '\n' ' ' | tr '"' "'" )
         fi
 
         local record_request
