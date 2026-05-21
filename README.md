@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="docs/logo.png" alt="Awen Logo" />
   <h1>Awen</h1>
   <p><b>Terminal Intelligence Layer — Smart when you need it. Silent when you don't.</b></p>
   <a href="https://github.com/zzf2333/Awen/releases"><img src="https://img.shields.io/github/v/tag/zzf2333/Awen?label=version&style=flat-square" alt="Version"></a>
