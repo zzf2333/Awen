@@ -235,15 +235,15 @@ pub fn parse_nl_suggestion(ai_response: &str) -> Option<Suggestion> {
         return None;
     }
     let text = text.trim_start_matches("```").trim_end_matches("```");
-    let text = text.strip_prefix("bash\n").or(Some(text)).unwrap();
-    let text = text.strip_prefix("sh\n").or(Some(text)).unwrap();
-    let text = text.strip_prefix("zsh\n").or(Some(text)).unwrap();
+    let text = text.strip_prefix("bash\n").unwrap_or(text);
+    let text = text.strip_prefix("sh\n").unwrap_or(text);
+    let text = text.strip_prefix("zsh\n").unwrap_or(text);
     let text = text.trim();
     if text.is_empty() || text.contains("```") {
         return None;
     }
-    let text = text.strip_prefix("$ ").or(Some(text)).unwrap();
-    let text = text.strip_prefix("% ").or(Some(text)).unwrap();
+    let text = text.strip_prefix("$ ").unwrap_or(text);
+    let text = text.strip_prefix("% ").unwrap_or(text);
 
     let first_line = text.lines().next().unwrap_or(text).trim();
     if first_line.is_empty() {
@@ -380,19 +380,18 @@ pub fn parse_ai_suggestion(input: &str, ai_response: &str) -> Option<Suggestion>
     if text.contains("```") {
         return None;
     }
-    let text = if text.starts_with("$ ") || text.starts_with("% ") {
-        &text[2..]
-    } else {
-        text
-    };
+    let text = text
+        .strip_prefix("$ ")
+        .or_else(|| text.strip_prefix("% "))
+        .unwrap_or(text);
     if EXPLANATION_PREFIXES.iter().any(|p| text.starts_with(p)) {
         return None;
     }
     if DANGEROUS_COMPLETION_RE.is_match(text) {
         return None;
     }
-    let suffix = if text.starts_with(input) {
-        &text[input.len()..]
+    let suffix = if let Some(stripped) = text.strip_prefix(input) {
+        stripped
     } else if let Some(stripped) = text.strip_prefix(input.trim_end()) {
         stripped
     } else {
