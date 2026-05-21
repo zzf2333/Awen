@@ -290,6 +290,7 @@ _awen_clear_ghost() {
 _awen_clear_hint() {
     _AWEN_HINT=""
     _AWEN_WARNING=""
+    zle -M "" 2>/dev/null
 }
 
 _awen_render_ghost() {
