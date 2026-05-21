@@ -1074,7 +1074,7 @@ awen_init() {
     add-zsh-hook preexec _awen_preexec
 
     _awen_line_init() {
-        _awen_suggest_next
+        :
     }
     zle -N zle-line-init _awen_line_init
 }
