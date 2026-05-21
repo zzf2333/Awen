@@ -198,7 +198,7 @@ _awen_pad_right() {
     local text="$1" width="$2"
     local len=${#text}
     if (( len >= width )); then
-        printf '%s' "${text:0:width}"
+        printf '%s' "${text[1,$width]}"
     else
         printf '%s%s' "$text" "$(_awen_repeat ' ' $(( width - len )))"
     fi

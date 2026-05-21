@@ -143,6 +143,18 @@ assert_eq "reconstruct: exact match" \
     "$(_awen_reconstruct_full_cmd "ls" "ls")"
 
 # ============================================================
+# Test: _awen_pad_right
+# ============================================================
+
+assert_eq "pad_right: pads short text" \
+    "abc  " \
+    "$(_awen_pad_right "abc" 5)"
+
+assert_eq "pad_right: truncates long text" \
+    "abc" \
+    "$(_awen_pad_right "abcdef" 3)"
+
+# ============================================================
 # Test: _awen_menu_reset
 # ============================================================
 
