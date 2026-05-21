@@ -195,6 +195,17 @@ _awen_source_title() {
     esac
 }
 
+_awen_source_icon() {
+    case "$1" in
+        history) printf '%s' "↺" ;;
+        specs)   printf '%s' "◇" ;;
+        ai)      printf '%s' "✦" ;;
+        failure) printf '%s' "✓" ;;
+        risk)    printf '%s' "!" ;;
+        *)       printf '%s' "•" ;;
+    esac
+}
+
 _awen_pad_right() {
     local text="$1" width="$2"
     local len=${#text}
@@ -215,7 +226,15 @@ _awen_repeat() {
 }
 
 _awen_keycap_line() {
-    printf '%s' "up/down select   enter accept   right next word   esc dismiss"
+    local width="$1"
+    local logo="Awen"
+    local actions="↑↓ select   ↵ accept   → next word   esc dismiss"
+    local gap=$(( width - ${#actions} - ${#logo} ))
+    if (( gap < 2 )); then
+        printf '%s' "$actions"
+    else
+        printf '%s%s%s' "$actions" "$(_awen_repeat ' ' "$gap")" "$logo"
+    fi
 }
 
 _awen_reconstruct_full_cmd() {
@@ -334,7 +353,7 @@ _awen_render_menu() {
     (( content_width < 36 )) && content_width=36
 
     local current_source=""
-    local i item_text item_source item_desc tag tag_style title title_text title_content title_line
+    local i item_text item_source item_desc tag tag_style title title_icon title_text title_content title_line
     local cmd_col desc_col tag_col content entry entry_len line_start spacer_content spacer_line
     local tag_width=8
     local cmd_width=$(( content_width * 48 / 100 ))
@@ -364,14 +383,15 @@ _awen_render_menu() {
             fi
             current_source="$item_source"
             title="$(_awen_source_title "$item_source")"
-            title_text=":: ${title}"
+            title_icon="$(_awen_source_icon "$item_source")"
+            title_text="${title_icon} ${title}"
             title_content="$(_awen_pad_right "$title_text" "$content_width")"
             title_line="  │ ${title_content} │"
             pd+=$'\n'"${title_line}"
             line_start=$(( offset + 1 ))
             region_highlight+=("${line_start} $(( line_start + ${#title_line} )) $_AWEN_STYLE_PANEL")
-            region_highlight+=("$(( line_start + 4 )) $(( line_start + 6 )) $(_awen_source_style "$item_source")")
-            region_highlight+=("$(( line_start + 7 )) $(( line_start + 4 + ${#title_text} + 1 )) $_AWEN_STYLE_MUTED")
+            region_highlight+=("$(( line_start + 4 )) $(( line_start + 4 + ${#title_icon} )) $(_awen_source_style "$item_source")")
+            region_highlight+=("$(( line_start + 5 + ${#title_icon} )) $(( line_start + 4 + ${#title_text} + 1 )) $_AWEN_STYLE_MUTED")
             (( offset += 1 + ${#title_line} ))
         fi
 
@@ -423,7 +443,7 @@ _awen_render_menu() {
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#mid_line} )) $_AWEN_STYLE_PANEL")
     (( offset += 1 + ${#mid_line} ))
 
-    local foot_content="$(_awen_pad_right "$(_awen_keycap_line)" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_keycap_line "$content_width")" "$content_width")"
     local foot_line="  │ ${foot_content} │"
     pd+=$'\n'"${foot_line}"
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#foot_line} )) $_AWEN_STYLE_PANEL")
