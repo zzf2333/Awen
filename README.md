@@ -111,7 +111,9 @@ Config lives at `~/.config/awen/config.toml`. All fields have sensible defaults.
 ```toml
 [ai]
 enabled = true                  # Toggle AI completion
-provider = "deepseek"           # deepseek | ollama
+base_url = "https://api.deepseek.com"   # Any OpenAI-compatible endpoint
+model = "deepseek-chat"         # Model name
+api_key = ""                    # Or set AWEN_API_KEY env var
 debounce_ms = 300               # Delay before triggering AI
 timeout_ms = 30000              # AI request timeout (async, never blocks input)
 max_tokens = 1024               # Max tokens for AI generation
@@ -119,14 +121,10 @@ min_local_candidates = 2        # AI triggers only when local results < this
 min_local_confidence = 0.6      # AND max confidence < this
 cache_ttl_minutes = 30          # Cache TTL for AI responses
 
-[ai.deepseek]
-api_key = ""                    # Or set DEEPSEEK_API_KEY env var
-model = "deepseek-chat"
-base_url = "https://api.deepseek.com"
-
-[ai.ollama]
-model = "qwen2.5-coder:7b"
-base_url = "http://localhost:11434"
+# Provider examples — just change base_url and model:
+# DeepSeek:  base_url = "https://api.deepseek.com",      model = "deepseek-chat"
+# Ollama:    base_url = "http://localhost:11434/v1",      model = "qwen2.5-coder:7b"
+# OpenAI:    base_url = "https://api.openai.com",         model = "gpt-4o"
 
 [context]
 session_history_size = 20       # Commands to remember in session

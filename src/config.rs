@@ -14,30 +14,15 @@ pub struct AwenConfig {
 #[serde(default)]
 pub struct AiConfig {
     pub enabled: bool,
-    pub provider: String,
+    pub base_url: String,
+    pub model: String,
+    pub api_key: String,
     pub debounce_ms: u64,
     pub timeout_ms: u64,
     pub max_tokens: u32,
     pub cache_ttl_minutes: u32,
     pub min_local_candidates: usize,
     pub min_local_confidence: f64,
-    pub deepseek: DeepSeekConfig,
-    pub ollama: OllamaConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct DeepSeekConfig {
-    pub api_key: String,
-    pub model: String,
-    pub base_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct OllamaConfig {
-    pub model: String,
-    pub base_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,34 +49,15 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            provider: "deepseek".into(),
+            base_url: "https://api.deepseek.com".into(),
+            model: "deepseek-chat".into(),
+            api_key: String::new(),
             debounce_ms: 300,
             timeout_ms: 30000,
             max_tokens: 1024,
             cache_ttl_minutes: 30,
             min_local_candidates: 2,
             min_local_confidence: 0.6,
-            deepseek: DeepSeekConfig::default(),
-            ollama: OllamaConfig::default(),
-        }
-    }
-}
-
-impl Default for DeepSeekConfig {
-    fn default() -> Self {
-        Self {
-            api_key: String::new(),
-            model: "deepseek-chat".into(),
-            base_url: "https://api.deepseek.com".into(),
-        }
-    }
-}
-
-impl Default for OllamaConfig {
-    fn default() -> Self {
-        Self {
-            model: "qwen2.5-coder:7b".into(),
-            base_url: "http://localhost:11434".into(),
         }
     }
 }
@@ -205,7 +171,9 @@ mod tests {
     fn test_default_config() {
         let config = AwenConfig::default();
         assert!(config.ai.enabled);
-        assert_eq!(config.ai.provider, "deepseek");
+        assert_eq!(config.ai.base_url, "https://api.deepseek.com");
+        assert_eq!(config.ai.model, "deepseek-chat");
+        assert!(config.ai.api_key.is_empty());
         assert_eq!(config.ai.debounce_ms, 300);
         assert_eq!(config.ai.min_local_candidates, 2);
         assert!((config.ai.min_local_confidence - 0.6).abs() < f64::EPSILON);
@@ -220,14 +188,11 @@ mod tests {
         let toml_str = r#"
 [ai]
 enabled = false
-provider = "ollama"
+base_url = "http://localhost:11434/v1"
+model = "codellama:7b"
 debounce_ms = 500
 max_tokens = 100
 cache_ttl_minutes = 60
-
-[ai.ollama]
-model = "codellama:7b"
-base_url = "http://localhost:11434"
 
 [context]
 session_history_size = 30
@@ -245,9 +210,9 @@ command_explanation = false
 "#;
         let config: AwenConfig = load_config_from_str(toml_str).unwrap();
         assert!(!config.ai.enabled);
-        assert_eq!(config.ai.provider, "ollama");
+        assert_eq!(config.ai.base_url, "http://localhost:11434/v1");
+        assert_eq!(config.ai.model, "codellama:7b");
         assert_eq!(config.ai.debounce_ms, 500);
-        assert_eq!(config.ai.ollama.model, "codellama:7b");
         assert_eq!(config.context.session_history_size, 30);
         assert!(!config.context.git_context);
         assert_eq!(config.ui.ghost_text_color, 240);
@@ -262,7 +227,7 @@ enabled = false
 "#;
         let config: AwenConfig = load_config_from_str(toml_str).unwrap();
         assert!(!config.ai.enabled);
-        assert_eq!(config.ai.provider, "deepseek");
+        assert_eq!(config.ai.base_url, "https://api.deepseek.com");
         assert_eq!(config.context.session_history_size, 20);
     }
 
@@ -270,7 +235,7 @@ enabled = false
     fn test_empty_config() {
         let config: AwenConfig = load_config_from_str("").unwrap();
         assert!(config.ai.enabled);
-        assert_eq!(config.ai.provider, "deepseek");
+        assert_eq!(config.ai.model, "deepseek-chat");
     }
 
     #[test]
@@ -278,7 +243,8 @@ enabled = false
         let config = AwenConfig::default();
         let serialized = toml::to_string_pretty(&config).unwrap();
         let parsed: AwenConfig = toml::from_str(&serialized).unwrap();
-        assert_eq!(config.ai.provider, parsed.ai.provider);
+        assert_eq!(config.ai.base_url, parsed.ai.base_url);
+        assert_eq!(config.ai.model, parsed.ai.model);
         assert_eq!(config.ui.ghost_text_color, parsed.ui.ghost_text_color);
     }
 }

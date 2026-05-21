@@ -62,20 +62,13 @@ if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
     cat > "${CONFIG_DIR}/config.toml" << 'EOF'
 [ai]
 enabled = true
-provider = "deepseek"
+base_url = "https://api.deepseek.com"
+model = "deepseek-chat"
+api_key = ""
 debounce_ms = 300
 timeout_ms = 30000
 max_tokens = 1024
 cache_ttl_minutes = 30
-
-[ai.deepseek]
-api_key = ""
-model = "deepseek-chat"
-base_url = "https://api.deepseek.com"
-
-[ai.ollama]
-model = "qwen2.5-coder:7b"
-base_url = "http://localhost:11434"
 
 [context]
 session_history_size = 20
@@ -163,7 +156,7 @@ echo "  On first launch, Awen will import your zsh history automatically."
 echo "  To import manually: awen history import"
 echo ""
 echo "For AI completions, set your API key in ${CONFIG_DIR}/config.toml"
-echo "or export DEEPSEEK_API_KEY=sk-your-key"
+echo "or export AWEN_API_KEY=your-key"
 echo ""
 echo "To disable AI completions: set ai.enabled = false in ${CONFIG_DIR}/config.toml"
 echo ""
