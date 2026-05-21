@@ -10,11 +10,11 @@ typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
 typeset -g _AWEN_GHOST_STYLE="fg=238"
-typeset -g _AWEN_STYLE_DIM="fg=241"
+typeset -g _AWEN_STYLE_DIM="fg=244"
 typeset -g _AWEN_STYLE_MUTED="fg=250"
 typeset -g _AWEN_STYLE_TEXT="fg=255"
 typeset -g _AWEN_STYLE_SELECTED="fg=255,bold,bg=236"
-typeset -g _AWEN_STYLE_PANEL="fg=238"
+typeset -g _AWEN_STYLE_PANEL="fg=240"
 typeset -g _AWEN_STYLE_PANEL_BG="bg=234"
 typeset -g _AWEN_STYLE_HISTORY="fg=146"
 typeset -g _AWEN_STYLE_SPEC="fg=69"
@@ -354,7 +354,7 @@ _awen_render_menu() {
 
     local current_source=""
     local i item_text item_source item_desc tag tag_style title title_icon title_text title_content title_line
-    local cmd_col desc_col tag_col content entry entry_len line_start spacer_content spacer_line
+    local cmd_col desc_col tag_col content entry entry_len line_start
     local tag_width=8
     local cmd_width=$(( content_width * 48 / 100 ))
     local desc_width=$(( content_width - cmd_width - tag_width - 4 ))
@@ -373,14 +373,6 @@ _awen_render_menu() {
         item_desc="${_AWEN_MENU_DESCS[$i]}"
 
         if [[ "$item_source" != "$current_source" ]]; then
-            if [[ -n "$current_source" ]]; then
-                spacer_content="$(_awen_pad_right "" "$content_width")"
-                spacer_line="  │ ${spacer_content} │"
-                pd+=$'\n'"${spacer_line}"
-                line_start=$(( offset + 1 ))
-                region_highlight+=("${line_start} $(( line_start + ${#spacer_line} )) $_AWEN_STYLE_PANEL")
-                (( offset += 1 + ${#spacer_line} ))
-            fi
             current_source="$item_source"
             title="$(_awen_source_title "$item_source")"
             title_icon="$(_awen_source_icon "$item_source")"
@@ -432,7 +424,7 @@ _awen_render_menu() {
             region_highlight+=("$(( base + 4 + content_width - tag_width )) $(( base + 4 + content_width )) ${tag_style},bold,bg=236")
         else
             region_highlight+=("$(( base + 4 )) $(( base + 6 + cmd_width )) $_AWEN_STYLE_TEXT")
-            region_highlight+=("$(( base + 7 + cmd_width )) $(( base + 7 + cmd_width + desc_width )) $_AWEN_STYLE_MUTED")
+            region_highlight+=("$(( base + 7 + cmd_width )) $(( base + 7 + cmd_width + desc_width )) $_AWEN_STYLE_DIM")
             region_highlight+=("$(( base + 4 + content_width - tag_width )) $(( base + 4 + content_width )) ${tag_style}")
         fi
         (( offset += 1 + entry_len ))
@@ -447,7 +439,8 @@ _awen_render_menu() {
     local foot_line="  │ ${foot_content} │"
     pd+=$'\n'"${foot_line}"
     region_highlight+=("$(( offset + 1 )) $(( offset + 1 + ${#foot_line} )) $_AWEN_STYLE_PANEL")
-    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width )) $_AWEN_STYLE_DIM")
+    region_highlight+=("$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM")
+    region_highlight+=("$(( offset + 4 + content_width - 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_MUTED")
     (( offset += 1 + ${#foot_line} ))
 
     local bottom_line="  ╰${rule}╯"
