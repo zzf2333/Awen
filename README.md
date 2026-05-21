@@ -13,7 +13,7 @@ Awen **always suggests, never executes**. Every suggestion requires your explici
 - **Ghost Text Completion** — Inline grey suggestion text; local suggestions (history + specs) appear instantly, AI suggestions refresh asynchronously after you stop typing
 - **Failure Recovery** — Suggests fix commands after the previous command fails (suggest only, never execute)
 - **Risk Detection** — Inline warnings for dangerous commands like `rm -rf`, `git push --force`, `chmod 777`
-- **Command Specs Completion** — Deterministic argument completion in TOML format, built-in for git/docker/npm/cargo/brew/curl/ssh
+- **Command Specs Completion** — Deterministic argument completion in TOML format, 77 built-in specs covering git, docker, npm, cargo, aws, gcloud, kubectl, helm, claude, codex, and more
 - **AI Completion** — Supports DeepSeek and Ollama, timeout-bounded optional, can be disabled
 - **Context Awareness** — Project type detection, Git status, recent commands, failure history
 
@@ -146,9 +146,35 @@ risk_detection = true           # Dangerous command warnings
 command_explanation = false     # Command explanation (planned, not yet implemented)
 ```
 
+### Built-in Specs
+
+Awen ships with 77 built-in command specs, organized by category:
+
+<details>
+<summary>Full list (click to expand)</summary>
+
+| Category | Commands |
+|----------|----------|
+| VCS & Dev Ecosystem | `git`, `docker`, `npm`, `cargo`, `brew`, `curl`, `ssh` |
+| Cloud & Infrastructure | `gh`, `kubectl`, `terraform`, `aws`, `gcloud`, `az`, `helm` |
+| Languages & Runtimes | `python`, `go`, `node` |
+| Package Managers & Build Tools | `pip`, `pnpm`, `yarn`, `bun`, `uv`, `poetry`, `cmake`, `make` |
+| AI Tools | `claude`, `codex`, `opencode`, `antigravity` |
+| File Operations | `ls`, `rm`, `cp`, `mv`, `mkdir`, `touch`, `ln`, `chmod`, `chown` |
+| Text Processing | `cat`, `head`, `tail`, `grep`, `sed`, `awk`, `sort`, `uniq`, `wc`, `diff`, `cut`, `tr`, `tee`, `xargs` |
+| Search, Archive & Process | `find`, `tar`, `ps`, `kill`, `df`, `du`, `lsof` |
+| Networking & Diagnostics | `ping`, `dig`, `wget`, `ss`, `nmap` |
+| System Administration | `systemctl`, `journalctl`, `htop` |
+| Terminal Multiplexers | `tmux`, `screen` |
+| Testing & Linting | `pytest`, `ruff` |
+| Task Runners | `just` |
+| Database CLIs | `psql`, `mysql`, `redis-cli`, `mongosh`, `sqlite3` |
+
+</details>
+
 ### Custom Specs
 
-Create TOML files in `~/.config/awen/specs/`:
+Create TOML files in `~/.config/awen/specs/` to add new commands or override built-ins:
 
 ```toml
 [command]
@@ -165,6 +191,21 @@ short = "-e"
 arg = "ENV"
 description = "Target environment"
 ```
+
+### Contributing Specs
+
+To contribute a built-in spec:
+
+1. Create `specs/<command>.toml` following the format above
+2. Register it in the `builtin_specs!` macro in `src/layer/specs.rs`
+3. Run `cargo test` to verify parsing
+
+Conventions:
+- Command and subcommand names are lowercase
+- Flag names use `--kebab-case`, short flags use `-x`
+- Argument placeholders are UPPERCASE (`FILE`, `NUM`, `DIR`)
+- Descriptions are terse, no trailing period
+- Dangerous flags (auto-execute, bypass safety) should go in risk patterns, not specs
 
 ### Custom Failure Patterns
 

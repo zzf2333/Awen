@@ -143,6 +143,36 @@ fn builtin_patterns() -> Vec<RiskPattern> {
             r"sudo\s+rm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+/\s",
             "Deleting from root with sudo — extremely dangerous",
         ),
+        // AI CLI — bypass safety / auto-execute
+        (
+            r"claude\s+.*--dangerously-skip-permissions",
+            "This bypasses all permission checks — Claude will execute without asking",
+        ),
+        (
+            r"claude\s+.*--permission-mode\s+full",
+            "Full permission mode allows unrestricted tool execution",
+        ),
+        (
+            r"codex\s+.*--approval-mode\s+full-auto",
+            "Full-auto mode executes code changes without confirmation",
+        ),
+        // Infrastructure — auto-approve
+        (
+            r"terraform\s+apply\s+.*-auto-approve",
+            "Auto-approve skips the confirmation prompt — changes apply immediately",
+        ),
+        (
+            r"terraform\s+destroy\s+.*-auto-approve",
+            "Auto-approve on destroy will delete infrastructure without confirmation",
+        ),
+        (
+            r"helm\s+(install|upgrade)\s+.*--force",
+            "Force install/upgrade may cause downtime by deleting and recreating resources",
+        ),
+        (
+            r"kubectl\s+delete\s+.*--force\s+.*--grace-period=0",
+            "Force delete with no grace period immediately kills pods — may cause data loss",
+        ),
     ];
 
     raw.into_iter()
@@ -216,6 +246,68 @@ mod tests {
     fn test_dd() {
         let layer = RiskLayer::new();
         assert!(layer.check("dd if=/dev/zero of=/dev/sda").is_some());
+    }
+
+    #[test]
+    fn test_ai_cli_bypass() {
+        let layer = RiskLayer::new();
+        assert!(
+            layer
+                .check("claude --dangerously-skip-permissions -p 'fix it'")
+                .is_some()
+        );
+        assert!(
+            layer
+                .check("claude --permission-mode full -p 'deploy'")
+                .is_some()
+        );
+        assert!(
+            layer
+                .check("codex --approval-mode full-auto 'refactor'")
+                .is_some()
+        );
+        // safe usage should not trigger
+        assert!(layer.check("claude -p 'hello'").is_none());
+        assert!(
+            layer
+                .check("codex --approval-mode suggest 'help'")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_terraform_auto_approve() {
+        let layer = RiskLayer::new();
+        assert!(layer.check("terraform apply -auto-approve").is_some());
+        assert!(layer.check("terraform destroy -auto-approve").is_some());
+        assert!(layer.check("terraform plan").is_none());
+    }
+
+    #[test]
+    fn test_helm_force() {
+        let layer = RiskLayer::new();
+        assert!(
+            layer
+                .check("helm upgrade my-release ./chart --force")
+                .is_some()
+        );
+        assert!(
+            layer
+                .check("helm install my-release ./chart --force")
+                .is_some()
+        );
+        assert!(layer.check("helm install my-release ./chart").is_none());
+    }
+
+    #[test]
+    fn test_kubectl_force_delete() {
+        let layer = RiskLayer::new();
+        assert!(
+            layer
+                .check("kubectl delete pod my-pod --force --grace-period=0")
+                .is_some()
+        );
+        assert!(layer.check("kubectl delete pod my-pod").is_none());
     }
 
     #[test]
