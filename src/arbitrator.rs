@@ -23,6 +23,7 @@ impl Arbitrator {
 
         SuggestResponse {
             suggestions,
+            path_completion: None,
             hint,
             warning,
             need_ai: false,
@@ -47,10 +48,9 @@ impl Arbitrator {
     }
 }
 
-const SOURCE_WEIGHTS: [(SuggestionSource, f64); 5] = [
+const SOURCE_WEIGHTS: [(SuggestionSource, f64); 4] = [
     (SuggestionSource::Failure, 1.0),
     (SuggestionSource::History, 0.9),
-    (SuggestionSource::Filesystem, 0.85),
     (SuggestionSource::Specs, 0.8),
     (SuggestionSource::Ai, 0.75),
 ];
@@ -244,6 +244,7 @@ mod tests {
     fn test_merge_ai_suggestion() {
         let mut response = SuggestResponse {
             suggestions: vec![make_suggestion("ls -la", SuggestionSource::History, 0.8)],
+            path_completion: None,
             hint: None,
             warning: None,
             need_ai: false,
@@ -265,6 +266,7 @@ mod tests {
                 SuggestionSource::History,
                 0.8,
             )],
+            path_completion: None,
             hint: None,
             warning: None,
             need_ai: false,

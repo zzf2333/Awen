@@ -27,6 +27,7 @@ pub struct LocalResult {
     pub response: SuggestResponse,
     pub has_failure_context: bool,
     pub local_failure_matched: bool,
+    pub has_path_completion: bool,
 }
 
 pub struct AiParams {
@@ -98,7 +99,10 @@ impl AiTriggerPolicy {
         if input.len() < 2 {
             return false;
         }
-        let candidate_count = local.response.suggestions.len();
+        let mut candidate_count = local.response.suggestions.len();
+        if local.has_path_completion {
+            candidate_count += 1;
+        }
         let max_confidence = local
             .response
             .suggestions
@@ -155,6 +159,7 @@ impl SuggestionPipeline {
             LocalResult {
                 response: SuggestResponse {
                     suggestions,
+                    path_completion: None,
                     hint,
                     warning: None,
                     need_ai: false,
@@ -162,6 +167,7 @@ impl SuggestionPipeline {
                 },
                 has_failure_context,
                 local_failure_matched,
+                has_path_completion: false,
             }
         } else {
             layers.context.update_cwd(req_context.cwd.clone());
@@ -174,9 +180,19 @@ impl SuggestionPipeline {
                 5,
             ));
             suggestions.extend(layers.specs.suggest(input, cursor_pos));
-            if layers.filesystem_enabled {
-                suggestions.extend(layers.filesystem.suggest(input, cursor_pos, req_context));
-            }
+
+            let path_completion = if layers.filesystem_enabled {
+                let fs = layers.filesystem.suggest(input, cursor_pos, req_context);
+                fs.into_iter()
+                    .max_by(|a, b| {
+                        a.confidence
+                            .partial_cmp(&b.confidence)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|s| s.text)
+            } else {
+                None
+            };
 
             let mut hint = None;
             let local_failure_matched = if let Some(exit_code) = req_context.last_exit_code
@@ -201,11 +217,14 @@ impl SuggestionPipeline {
                 None
             };
 
-            let response = Arbitrator::arbitrate(suggestions, req_context, hint, warning);
+            let has_path_completion = path_completion.is_some();
+            let mut response = Arbitrator::arbitrate(suggestions, req_context, hint, warning);
+            response.path_completion = path_completion;
             LocalResult {
                 response,
                 has_failure_context,
                 local_failure_matched,
+                has_path_completion,
             }
         }
     }
@@ -332,6 +351,7 @@ mod tests {
         LocalResult {
             response: SuggestResponse {
                 suggestions,
+                path_completion: None,
                 hint: None,
                 warning,
                 need_ai: false,
@@ -339,6 +359,7 @@ mod tests {
             },
             has_failure_context,
             local_failure_matched,
+            has_path_completion: false,
         }
     }
 
