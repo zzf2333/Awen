@@ -115,6 +115,7 @@ awen_init() {
         _AWEN_MENU_ACTIVE=0
         _AWEN_MENU_COUNT=0
         _AWEN_SUGGESTION=""
+        { POSTDISPLAY=""; region_highlight=(); } 2>/dev/null
     ' WINCH
 
     typeset -ga _AWEN_CONFLICTS=()
