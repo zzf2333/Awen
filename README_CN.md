@@ -69,6 +69,62 @@ cd Awen
 
 重启 shell 即可。Awen 首次启动会自动导入 zsh 历史。
 
+## 更新
+
+### Homebrew
+
+```bash
+brew upgrade zzf2333/tap/awen
+awen stop && awen start
+```
+
+### 一键脚本
+
+```bash
+curl -sSL https://raw.githubusercontent.com/zzf2333/Awen/main/install-remote.sh | sh
+```
+
+### 从源码
+
+```bash
+cd Awen
+git pull
+./install.sh
+```
+
+更新后重启 shell 即可。
+
+## 卸载
+
+### 第一步 — 移除数据、配置和 shell 集成
+
+```bash
+awen uninstall
+```
+
+该命令会：
+- 停止 daemon
+- 从 `~/.zshrc` 移除 `source` 行
+- 删除 `~/.config/awen/`（配置、规格、插件）
+- 删除 `~/.local/share/awen/`（历史数据库、日志）
+- 清理运行时文件（socket、pid）
+
+加 `--yes` 跳过确认：`awen uninstall --yes`
+
+### 第二步 — 移除二进制文件
+
+**Homebrew：**
+
+```bash
+brew uninstall zzf2333/tap/awen
+```
+
+**一键脚本 / 源码安装：**
+
+```bash
+rm ~/.local/bin/awen
+```
+
 ## 使用
 
 ### 交互模式

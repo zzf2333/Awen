@@ -69,6 +69,62 @@ cd Awen
 
 Restart your shell. Awen starts automatically and imports your zsh history on first launch.
 
+## Update
+
+### Homebrew
+
+```bash
+brew upgrade zzf2333/tap/awen
+awen stop && awen start
+```
+
+### Shell Script
+
+```bash
+curl -sSL https://raw.githubusercontent.com/zzf2333/Awen/main/install-remote.sh | sh
+```
+
+### From Source
+
+```bash
+cd Awen
+git pull
+./install.sh
+```
+
+Restart your shell after updating.
+
+## Uninstall
+
+### Step 1 — Remove data, config, and shell integration
+
+```bash
+awen uninstall
+```
+
+This will:
+- Stop the daemon
+- Remove the `source` line from `~/.zshrc`
+- Delete `~/.config/awen/` (config, specs, plugin)
+- Delete `~/.local/share/awen/` (history database, logs)
+- Clean up runtime files (socket, pid)
+
+Use `awen uninstall --yes` to skip confirmation.
+
+### Step 2 — Remove the binary
+
+**Homebrew:**
+
+```bash
+brew uninstall zzf2333/tap/awen
+```
+
+**Shell Script / Source install:**
+
+```bash
+rm ~/.local/bin/awen
+```
+
 ## Usage
 
 ### Interaction Modes
