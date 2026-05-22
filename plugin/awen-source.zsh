@@ -75,6 +75,7 @@ _awen_hl_clear() {
     region_highlight=("${(@)region_highlight:#*fg=214*}")
     region_highlight=("${(@)region_highlight:#*fg=82*}")
     region_highlight=("${(@)region_highlight:#*fg=82,bold*}")
+    region_highlight=("${(@)region_highlight:#*fg=238*}")
     _AWEN_GHOST_HIGHLIGHT=""
 }
 

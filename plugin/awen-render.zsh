@@ -233,7 +233,7 @@ _awen_render_menu() {
     _awen_hl_add "$(( offset + 1 )) $(( offset + 1 + ${#foot_line} )) $_AWEN_STYLE_PANEL"
     _awen_hl_add "$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
     _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} )) $(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $_AWEN_STYLE_MUTED"
-    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
+    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width )) $_AWEN_STYLE_VERSION"
     (( offset += 1 + ${#foot_line} ))
 
     local bottom_line="  ╰${rule}╯"
@@ -369,7 +369,7 @@ _awen_render_ai_loading_panel() {
     _awen_hl_add "$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_PANEL"
     _awen_hl_add "$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
     _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} )) $(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $_AWEN_STYLE_MUTED"
-    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
+    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width )) $_AWEN_STYLE_VERSION"
     (( offset += 1 + ${#line} ))
 
     line="  ╰${rule}╯"
@@ -456,7 +456,7 @@ _awen_render_failure_panel() {
     _awen_hl_add "$(( offset + 1 )) $(( offset + 1 + ${#line} )) $_AWEN_STYLE_FIX"
     _awen_hl_add "$(( offset + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
     _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} )) $(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $_AWEN_STYLE_MUTED"
-    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width + 1 )) $_AWEN_STYLE_DIM"
+    _awen_hl_add "$(( offset + 4 + content_width - ${#_AWEN_LOGO} + 4 )) $(( offset + 4 + content_width )) $_AWEN_STYLE_VERSION"
     (( offset += 1 + ${#line} ))
 
     pd+=$'\n'"${bottom_line}"

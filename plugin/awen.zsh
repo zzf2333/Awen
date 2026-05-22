@@ -24,6 +24,7 @@ typeset -g _AWEN_STYLE_AI="${AWEN_STYLE_AI:-fg=177}"
 typeset -g _AWEN_STYLE_RISK="${AWEN_STYLE_RISK:-fg=220}"
 typeset -g _AWEN_STYLE_FIX="${AWEN_STYLE_FIX:-fg=108}"
 typeset -g _AWEN_STYLE_FILE="${AWEN_STYLE_FILE:-fg=73}"
+typeset -g _AWEN_STYLE_VERSION="${AWEN_STYLE_VERSION:-fg=238}"
 
 # Async AI state
 typeset -g _AWEN_AI_PID=""
