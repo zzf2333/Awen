@@ -59,8 +59,8 @@ pub struct UiConfig {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UiMode {
-    #[default]
     Minimal,
+    #[default]
     Full,
 }
 
@@ -240,7 +240,7 @@ mod tests {
         assert!(!config.ai.features.nl_generation);
         assert_eq!(config.context.session_history_size, 20);
         assert!(!config.context.capture_stderr);
-        assert_eq!(config.ui.mode, UiMode::Minimal);
+        assert_eq!(config.ui.mode, UiMode::Full);
         assert_eq!(config.ui.ghost_text_color, 242);
         assert!(!config.ui.command_explanation);
     }

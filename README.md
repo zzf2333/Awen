@@ -75,9 +75,9 @@ Restart your shell. Awen starts automatically and imports your zsh history on fi
 
 Awen has two interaction modes, configured via `[ui] mode` in config or `AWEN_UI_MODE` env var:
 
-**Minimal (default)** — ghost text only, like zsh-autosuggestions. No dropdown menu, no panels. Up/Down/Enter pass through to the shell. Lightest footprint.
+**Full (default)** — dropdown menu with source labels, risk panels, failure recovery panels. Tab cycles, Up/Down navigate, Enter accepts.
 
-**Full** — dropdown menu with source labels, risk panels, failure recovery panels. Tab cycles, Up/Down navigate, Enter accepts.
+**Minimal** — ghost text only, like zsh-autosuggestions. No dropdown menu, no panels. Up/Down/Enter pass through to the shell. Lightest footprint.
 
 If zsh-autosuggestions or fzf are detected, Awen automatically downgrades to minimal mode to avoid keybinding conflicts.
 
@@ -146,7 +146,7 @@ git_context = true              # Collect git context
 capture_stderr = true           # Capture stderr for failure recovery
 
 [ui]
-mode = "minimal"                # "minimal" (ghost only) or "full" (menu + panels)
+mode = "full"                   # "full" (menu + panels) or "minimal" (ghost only)
 ghost_text_color = 242          # Ghost text color (ANSI 256)
 hint_style = "above"            # Hint position: "above" or "below"
 dropdown_max_items = 8          # Max items in suggestion menu

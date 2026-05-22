@@ -48,7 +48,7 @@ typeset -g  _AWEN_MENU_COUNT=0
 typeset -g  _AWEN_MENU_MAX="${AWEN_MENU_MAX_ITEMS:-5}"
 typeset -g  _AWEN_MENU_ENABLED="${AWEN_MENU_ENABLED:-1}"
 typeset -g  _AWEN_STDERR_MAX="${AWEN_STDERR_MAX_CHARS:-500}"
-typeset -g  _AWEN_UI_MODE="${AWEN_UI_MODE:-minimal}"
+typeset -g  _AWEN_UI_MODE="${AWEN_UI_MODE:-full}"
 
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
