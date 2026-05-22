@@ -245,7 +245,12 @@ src/
     ├── risk.rs          # 输入 → 危险警告
     └── history_import.rs
 plugin/
-└── awen.zsh             # zsh widget（ghost text、菜单、提示）
+├── awen.zsh             # 入口：全局变量、初始化、模块加载
+├── awen-utils.zsh       # JSON、socket、时间、布局工具
+├── awen-source.zsh      # 来源标签/样式/图标、高亮管理器
+├── awen-render.zsh      # Ghost text、菜单、面板渲染
+├── awen-interact.zsh    # ZLE widget 处理（接受、关闭、导航）
+└── awen-communicate.zsh # 请求/响应、异步 AI、钩子
 specs/
 └── *.toml               # 77 条内置命令规格
 ```

@@ -245,7 +245,12 @@ src/
     ├── risk.rs          # Input → danger warning
     └── history_import.rs
 plugin/
-└── awen.zsh             # zsh widget (ghost text, menu, hints)
+├── awen.zsh             # Entry point: globals, init, module sourcing
+├── awen-utils.zsh       # JSON, socket, time, layout helpers
+├── awen-source.zsh      # Source labels/styles/icons, highlight manager
+├── awen-render.zsh      # Ghost text, menu, panels rendering
+├── awen-interact.zsh    # ZLE widget handlers (accept, dismiss, navigate)
+└── awen-communicate.zsh # Request/response, async AI, hooks
 specs/
 └── *.toml               # 77 built-in command specs
 ```

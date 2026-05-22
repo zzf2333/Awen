@@ -54,7 +54,7 @@ mkdir -p "${CONFIG_DIR}/specs"
 cp "${SCRIPT_DIR}"/specs/*.toml "${CONFIG_DIR}/specs/"
 
 info "Installing zsh plugin to ${PLUGIN_DIR}/..."
-cp "${SCRIPT_DIR}/plugin/awen.zsh" "${PLUGIN_DIR}/awen.zsh"
+cp "${SCRIPT_DIR}"/plugin/awen*.zsh "${PLUGIN_DIR}/"
 
 # Create default config if not exists
 if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
