@@ -107,6 +107,7 @@ pub enum SuggestionSource {
     Specs,
     Ai,
     Failure,
+    Filesystem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

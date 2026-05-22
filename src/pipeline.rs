@@ -6,6 +6,7 @@ use crate::config::AiConfig;
 use crate::context::ContextEngine;
 use crate::layer::ai::{self, AiProvider};
 use crate::layer::failure::FailureLayer;
+use crate::layer::filesystem::FilesystemLayer;
 use crate::layer::history::HistoryLayer;
 use crate::layer::risk::RiskLayer;
 use crate::layer::specs::SpecsLayer;
@@ -16,8 +17,10 @@ pub struct Layers<'a> {
     pub specs: &'a SpecsLayer,
     pub failure: &'a FailureLayer,
     pub risk: &'a RiskLayer,
+    pub filesystem: &'a mut FilesystemLayer,
     pub context: &'a mut ContextEngine,
     pub risk_enabled: bool,
+    pub filesystem_enabled: bool,
 }
 
 pub struct LocalResult {
@@ -165,6 +168,9 @@ impl SuggestionPipeline {
                 5,
             ));
             suggestions.extend(layers.specs.suggest(input, cursor_pos));
+            if layers.filesystem_enabled {
+                suggestions.extend(layers.filesystem.suggest(input, cursor_pos, req_context));
+            }
 
             let mut hint = None;
             let local_failure_matched = if let Some(exit_code) = req_context.last_exit_code

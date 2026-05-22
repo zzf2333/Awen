@@ -32,6 +32,7 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 | Feature | What it does | Speed |
 | :--- | :--- | :--- |
 | **Ghost Text** | Inline completion from history + command specs | <5ms |
+| **File Completion** | Warp-style directory/file path completion with fuzzy match | <10ms |
 | **Failure Recovery** | Detects 18 error patterns, suggests the fix | instant |
 | **Risk Detection** | Warns on 24 dangerous command patterns before you hit Enter | instant |
 | **Command Specs** | 77 built-in specs — subcommands, flags, descriptions | <20ms |

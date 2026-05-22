@@ -8,6 +8,7 @@ pub struct AwenConfig {
     pub ai: AiConfig,
     pub context: ContextConfig,
     pub ui: UiConfig,
+    pub filesystem: FilesystemConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +83,24 @@ impl Default for UiConfig {
             hint_style: "above".into(),
             risk_detection: true,
             command_explanation: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FilesystemConfig {
+    pub enabled: bool,
+    pub cache_ttl_ms: u64,
+    pub max_scan_entries: usize,
+}
+
+impl Default for FilesystemConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cache_ttl_ms: 2000,
+            max_scan_entries: 1000,
         }
     }
 }

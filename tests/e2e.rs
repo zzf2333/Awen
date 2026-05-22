@@ -1750,3 +1750,204 @@ async fn test_nl_generate_with_ai_provider() {
 
     daemon.shutdown().await;
 }
+
+// ============================================================
+// Filesystem Layer E2E
+// ============================================================
+
+#[tokio::test]
+async fn test_filesystem_cd_only_directories() {
+    let daemon = TestDaemon::start().await;
+    let cwd = tempfile::tempdir().unwrap();
+    std::fs::create_dir(cwd.path().join("src")).unwrap();
+    std::fs::create_dir(cwd.path().join("tests")).unwrap();
+    std::fs::write(cwd.path().join("main.rs"), "").unwrap();
+
+    let resp = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "cd ".into(),
+            cursor_pos: 3,
+            context: RequestContext {
+                cwd: cwd.path().to_string_lossy().into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: true,
+        }))
+        .await;
+
+    match resp {
+        Response::Suggest(s) => {
+            assert!(!s.suggestions.is_empty());
+            for suggestion in &s.suggestions {
+                if suggestion.source == SuggestionSource::Filesystem {
+                    assert!(
+                        suggestion.text.ends_with('/'),
+                        "cd should only suggest directories, got: {}",
+                        suggestion.text
+                    );
+                }
+            }
+            let fs_texts: Vec<&str> = s
+                .suggestions
+                .iter()
+                .filter(|s| s.source == SuggestionSource::Filesystem)
+                .map(|s| s.text.as_str())
+                .collect();
+            assert!(fs_texts.contains(&"src/"));
+            assert!(fs_texts.contains(&"tests/"));
+            assert!(!fs_texts.contains(&"main.rs"));
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_filesystem_cat_only_files() {
+    let daemon = TestDaemon::start().await;
+    let cwd = tempfile::tempdir().unwrap();
+    std::fs::create_dir(cwd.path().join("src")).unwrap();
+    std::fs::write(cwd.path().join("main.rs"), "").unwrap();
+    std::fs::write(cwd.path().join("lib.rs"), "").unwrap();
+
+    let resp = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "cat ".into(),
+            cursor_pos: 4,
+            context: RequestContext {
+                cwd: cwd.path().to_string_lossy().into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: true,
+        }))
+        .await;
+
+    match resp {
+        Response::Suggest(s) => {
+            let fs_suggestions: Vec<&Suggestion> = s
+                .suggestions
+                .iter()
+                .filter(|s| s.source == SuggestionSource::Filesystem)
+                .collect();
+            assert!(!fs_suggestions.is_empty());
+            for suggestion in &fs_suggestions {
+                assert!(
+                    !suggestion.text.ends_with('/'),
+                    "cat should only suggest files, got: {}",
+                    suggestion.text
+                );
+            }
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_filesystem_sensitive_paths_hidden() {
+    let daemon = TestDaemon::start().await;
+    let cwd = tempfile::tempdir().unwrap();
+    std::fs::create_dir(cwd.path().join("src")).unwrap();
+    std::fs::create_dir(cwd.path().join(".ssh")).unwrap();
+    std::fs::write(cwd.path().join(".env"), "SECRET=x").unwrap();
+    std::fs::create_dir(cwd.path().join(".git")).unwrap();
+
+    let resp = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "cd ".into(),
+            cursor_pos: 3,
+            context: RequestContext {
+                cwd: cwd.path().to_string_lossy().into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: true,
+        }))
+        .await;
+
+    match resp {
+        Response::Suggest(s) => {
+            let fs_texts: Vec<&str> = s
+                .suggestions
+                .iter()
+                .filter(|s| s.source == SuggestionSource::Filesystem)
+                .map(|s| s.text.as_str())
+                .collect();
+            assert!(fs_texts.contains(&"src/"));
+            assert!(!fs_texts.iter().any(|t| t.contains(".ssh")));
+            assert!(!fs_texts.iter().any(|t| t.contains(".env")));
+            assert!(!fs_texts.iter().any(|t| t.contains(".git")));
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_filesystem_disabled_config() {
+    let mut config = test_config();
+    config.filesystem.enabled = false;
+
+    let daemon = TestDaemon::start_with_config_and_ai(config, None).await;
+    let cwd = tempfile::tempdir().unwrap();
+    std::fs::create_dir(cwd.path().join("src")).unwrap();
+
+    let resp = daemon
+        .send(&Request::Suggest(SuggestRequest {
+            input: "cd ".into(),
+            cursor_pos: 3,
+            context: RequestContext {
+                cwd: cwd.path().to_string_lossy().into(),
+                last_command: None,
+                last_exit_code: None,
+                last_stderr: None,
+                git_branch: None,
+                git_status: None,
+                session_commands: vec![],
+                env_hints: vec![],
+            },
+            timestamp: None,
+            skip_ai: true,
+        }))
+        .await;
+
+    match resp {
+        Response::Suggest(s) => {
+            let fs_suggestions: Vec<&Suggestion> = s
+                .suggestions
+                .iter()
+                .filter(|s| s.source == SuggestionSource::Filesystem)
+                .collect();
+            assert!(
+                fs_suggestions.is_empty(),
+                "filesystem suggestions should be empty when disabled"
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}

@@ -2,6 +2,7 @@ use crate::config::{self, AwenConfig};
 use crate::context::ContextEngine;
 use crate::layer::ai;
 use crate::layer::failure::FailureLayer;
+use crate::layer::filesystem::FilesystemLayer;
 use crate::layer::history::HistoryLayer;
 use crate::layer::risk::RiskLayer;
 use crate::layer::specs::SpecsLayer;
@@ -19,6 +20,7 @@ struct DaemonState {
     specs: SpecsLayer,
     failure: FailureLayer,
     risk: RiskLayer,
+    filesystem: FilesystemLayer,
     ai_provider: Option<Arc<dyn ai::AiProvider>>,
     config: AwenConfig,
     start_time: std::time::Instant,
@@ -82,6 +84,7 @@ pub async fn run_on_paths_with_ai(
     risk.load_user_patterns(&paths.config_dir.join("risk_patterns.toml"));
 
     let ai_provider = ai_override.or_else(|| ai::create_provider(&config));
+    let filesystem = FilesystemLayer::new(config.filesystem.clone());
 
     let state = Arc::new(Mutex::new(DaemonState {
         context: ContextEngine::new(&config),
@@ -89,6 +92,7 @@ pub async fn run_on_paths_with_ai(
         specs,
         failure,
         risk,
+        filesystem,
         ai_provider,
         config: config.clone(),
         start_time: std::time::Instant::now(),
@@ -230,8 +234,10 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
                 specs: &st_ref.specs,
                 failure: &st_ref.failure,
                 risk: &st_ref.risk,
+                filesystem: &mut st_ref.filesystem,
                 context: &mut st_ref.context,
                 risk_enabled: st_ref.config.ui.risk_detection,
+                filesystem_enabled: st_ref.config.filesystem.enabled,
             };
             SuggestionPipeline::collect_local(&mut layers, &req.input, req.cursor_pos, &req.context)
         };

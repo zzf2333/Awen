@@ -237,7 +237,10 @@ async fn cmd_setup() {
         let content = toml::to_string_pretty(&default).unwrap();
         match std::fs::write(&config_path, &content) {
             Ok(()) => println!("[1/4] config: created {}", config_path.display()),
-            Err(e) => eprintln!("[1/4] config: failed to write {}: {e}", config_path.display()),
+            Err(e) => eprintln!(
+                "[1/4] config: failed to write {}: {e}",
+                config_path.display()
+            ),
         }
     } else {
         println!("[1/4] config: {}", config_path.display());
@@ -285,7 +288,9 @@ async fn cmd_setup() {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         if daemon::is_running() {
             if let Some(pid) = daemon::read_pid() {
-                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGTERM);
+                }
                 daemon::cleanup_socket();
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -307,7 +312,10 @@ async fn cmd_setup() {
     // 4. Verify
     match daemon::send_status_request().await {
         Ok(protocol::Response::Status(s)) => {
-            println!("[4/4] status: pid {}, {} history entries", s.pid, s.history_count);
+            println!(
+                "[4/4] status: pid {}, {} history entries",
+                s.pid, s.history_count
+            );
         }
         _ => {
             println!("[4/4] status: daemon running (could not query details)");
