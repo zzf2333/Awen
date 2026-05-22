@@ -127,6 +127,7 @@ awen_init() {
     fi
     if (( ${#_AWEN_CONFLICTS} > 0 )) && [[ "$_AWEN_UI_MODE" == "full" ]]; then
         _AWEN_UI_MODE="minimal"
+        AWEN_UI_MODE="minimal"
         echo "awen: detected ${(j:, :)_AWEN_CONFLICTS} — switching to minimal mode" >&2
     fi
 

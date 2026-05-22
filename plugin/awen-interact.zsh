@@ -194,10 +194,10 @@ _awen_menu_accept() {
         _awen_hl_clear
         _awen_menu_reset
         _AWEN_SUGGESTION=""
+        _AWEN_NL_MODE=0
         POSTDISPLAY=""
         _awen_clear_hint
         zle -R
-        _awen_suggest_local
     else
         _awen_cancel_pending_ai
         _awen_hl_clear
