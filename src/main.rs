@@ -56,6 +56,14 @@ enum HistoryAction {
         #[arg(long)]
         force: bool,
     },
+    /// Show history database statistics
+    Stats,
+    /// Clear all history entries
+    Clear {
+        /// Skip confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[tokio::main]
@@ -72,6 +80,8 @@ async fn main() {
         Commands::Setup => cmd_setup().await,
         Commands::History { action } => match action {
             HistoryAction::Import { file, force } => cmd_history_import(file, force),
+            HistoryAction::Stats => cmd_history_stats(),
+            HistoryAction::Clear { yes } => cmd_history_clear(yes),
         },
     }
 }
@@ -221,6 +231,48 @@ fn cmd_history_import(file: Option<PathBuf>, force: bool) {
             eprintln!("import failed: {e}");
             std::process::exit(1);
         }
+    }
+}
+
+fn cmd_history_stats() {
+    let db_path = config::history_db_path();
+    if !db_path.exists() {
+        println!("no history database found");
+        return;
+    }
+    match HistoryLayer::new(&db_path) {
+        Ok(history) => {
+            let count = history.count();
+            let size = std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
+            println!("history database: {}", db_path.display());
+            println!("  entries: {count}");
+            println!("  size:    {:.1} KB", size as f64 / 1024.0);
+        }
+        Err(e) => eprintln!("failed to open history: {e}"),
+    }
+}
+
+fn cmd_history_clear(yes: bool) {
+    let db_path = config::history_db_path();
+    if !db_path.exists() {
+        println!("no history database found");
+        return;
+    }
+
+    if !yes {
+        eprint!("this will delete all history entries. continue? [y/N] ");
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_err()
+            || !input.trim().eq_ignore_ascii_case("y")
+        {
+            println!("aborted");
+            return;
+        }
+    }
+
+    match std::fs::remove_file(&db_path) {
+        Ok(()) => println!("history cleared"),
+        Err(e) => eprintln!("failed to clear history: {e}"),
     }
 }
 

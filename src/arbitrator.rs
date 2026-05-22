@@ -46,9 +46,67 @@ impl Arbitrator {
     }
 }
 
+const SOURCE_WEIGHTS: [(SuggestionSource, f64); 5] = [
+    (SuggestionSource::Failure, 1.0),
+    (SuggestionSource::History, 0.9),
+    (SuggestionSource::Filesystem, 0.85),
+    (SuggestionSource::Specs, 0.8),
+    (SuggestionSource::Ai, 0.75),
+];
+
+fn source_base_weight(source: SuggestionSource) -> f64 {
+    SOURCE_WEIGHTS
+        .iter()
+        .find(|(s, _)| *s == source)
+        .map(|(_, w)| *w)
+        .unwrap_or(1.0)
+}
+
 fn apply_context_weights(suggestions: &mut [Suggestion], context: &RequestContext) {
     let is_failure = context.last_exit_code.is_some_and(|c| c != 0);
-    let git_ahead = context
+    let git_ahead = parse_git_ahead(context);
+    let last_tool = context
+        .last_command
+        .as_ref()
+        .and_then(|c| c.split_whitespace().next())
+        .unwrap_or("");
+
+    for suggestion in suggestions.iter_mut() {
+        let mut weight = source_base_weight(suggestion.source);
+
+        // failure recovery boost
+        if is_failure && suggestion.source == SuggestionSource::Failure {
+            weight *= 3.0;
+        }
+
+        // git push boost when commits ahead
+        if git_ahead > 0 && suggestion.text.contains("push") {
+            weight *= 2.0;
+        }
+
+        // same-tool session affinity
+        if suggestion.source == SuggestionSource::History && !last_tool.is_empty() {
+            let same_tool = suggestion
+                .text
+                .split_whitespace()
+                .next()
+                .is_some_and(|t| t == last_tool);
+            if same_tool {
+                weight *= 1.3;
+            }
+        }
+
+        // risk penalty: dangerous-looking suggestions get deprioritized
+        if has_risk_indicator(&suggestion.text) {
+            weight *= 0.7;
+        }
+
+        suggestion.confidence *= weight;
+    }
+}
+
+fn parse_git_ahead(context: &RequestContext) -> u32 {
+    context
         .git_status
         .as_ref()
         .and_then(|s| {
@@ -57,34 +115,15 @@ fn apply_context_weights(suggestions: &mut [Suggestion], context: &RequestContex
                 .and_then(|p| p.strip_prefix("ahead="))
                 .and_then(|n| n.parse::<u32>().ok())
         })
-        .unwrap_or(0);
+        .unwrap_or(0)
+}
 
-    let input_tool = context
-        .last_command
-        .as_ref()
-        .and_then(|c| c.split_whitespace().next())
-        .unwrap_or("");
-
-    for suggestion in suggestions.iter_mut() {
-        if is_failure && suggestion.source == SuggestionSource::Failure {
-            suggestion.confidence *= 3.0;
-        }
-
-        if git_ahead > 0 && suggestion.text.contains("push") {
-            suggestion.confidence *= 2.0;
-        }
-
-        if suggestion.source == SuggestionSource::History {
-            let same_tool = suggestion
-                .text
-                .split_whitespace()
-                .next()
-                .is_some_and(|t| t == input_tool);
-            if same_tool && !input_tool.is_empty() {
-                suggestion.confidence *= 1.3;
-            }
-        }
-    }
+fn has_risk_indicator(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    lower.contains("--force")
+        || lower.contains("-rf /")
+        || lower.contains("--hard")
+        || lower.contains("--no-verify")
 }
 
 fn dedup_suggestions(suggestions: &mut Vec<Suggestion>) {
@@ -169,7 +208,7 @@ mod tests {
 
         let result = Arbitrator::arbitrate(suggestions, &default_context(), None, None);
         assert_eq!(result.suggestions.len(), 1);
-        assert_eq!(result.suggestions[0].confidence, 0.8);
+        assert_eq!(result.suggestions[0].source, SuggestionSource::History);
     }
 
     #[test]
@@ -240,5 +279,52 @@ mod tests {
         assert!(is_similar("docker run", "docker run"));
         assert!(is_similar("docker run", "docker rn"));
         assert!(!is_similar("docker run", "npm install"));
+    }
+
+    #[test]
+    fn test_source_base_weight() {
+        assert!(
+            source_base_weight(SuggestionSource::History)
+                > source_base_weight(SuggestionSource::Specs)
+        );
+        assert!(
+            source_base_weight(SuggestionSource::Specs) > source_base_weight(SuggestionSource::Ai)
+        );
+        assert!((source_base_weight(SuggestionSource::Failure) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_risk_penalty() {
+        let suggestions = vec![
+            make_suggestion("git push", SuggestionSource::History, 0.8),
+            make_suggestion("git push --force", SuggestionSource::History, 0.8),
+        ];
+
+        let result = Arbitrator::arbitrate(suggestions, &default_context(), None, None);
+        let safe = result
+            .suggestions
+            .iter()
+            .find(|s| s.text == "git push")
+            .unwrap();
+        let risky = result
+            .suggestions
+            .iter()
+            .find(|s| s.text == "git push --force")
+            .unwrap();
+        assert!(safe.confidence > risky.confidence);
+    }
+
+    #[test]
+    fn test_same_tool_session_affinity() {
+        let suggestions = vec![
+            make_suggestion("git status", SuggestionSource::History, 0.5),
+            make_suggestion("npm install", SuggestionSource::History, 0.5),
+        ];
+
+        let mut ctx = default_context();
+        ctx.last_command = Some("git commit -m test".into());
+
+        let result = Arbitrator::arbitrate(suggestions, &ctx, None, None);
+        assert_eq!(result.suggestions[0].text, "git status");
     }
 }

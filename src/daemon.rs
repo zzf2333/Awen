@@ -272,7 +272,7 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
 }
 
 async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let (ai_provider, max_tokens, timeout_ms, stderr_max_chars, risk_enabled) = {
+    let (ai_provider, max_tokens, timeout_ms, stderr_max_chars, risk_enabled, nl_enabled) = {
         let state = state.lock().await;
         (
             state.ai_provider.clone(),
@@ -280,8 +280,17 @@ async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonStat
             state.config.ai.timeout_ms,
             state.config.context.stderr_max_chars,
             state.config.ui.risk_detection,
+            state.config.ai.features.nl_generation,
         )
     };
+
+    if !nl_enabled {
+        return Response::NlGenerate(NlGenerateResponse {
+            command: None,
+            explanation: None,
+            warning: None,
+        });
+    }
 
     let Some(provider) = ai_provider else {
         return Response::NlGenerate(NlGenerateResponse {

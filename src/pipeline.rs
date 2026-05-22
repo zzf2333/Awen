@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::arbitrator::Arbitrator;
-use crate::config::AiConfig;
+use crate::config::{AiConfig, AiFeaturesConfig};
 use crate::context::ContextEngine;
 use crate::layer::ai::{self, AiProvider};
 use crate::layer::failure::FailureLayer;
@@ -47,6 +47,7 @@ pub struct AiTriggerPolicy {
     min_local_candidates: usize,
     min_local_confidence: f64,
     debounce_ms: u64,
+    features: AiFeaturesConfig,
 }
 
 impl AiTriggerPolicy {
@@ -55,6 +56,7 @@ impl AiTriggerPolicy {
             min_local_candidates: config.min_local_candidates,
             min_local_confidence: config.min_local_confidence,
             debounce_ms: config.debounce_ms,
+            features: config.features.clone(),
         }
     }
 
@@ -88,7 +90,10 @@ impl AiTriggerPolicy {
             return false;
         }
         if local.has_failure_context && !local.local_failure_matched {
-            return true;
+            return self.features.error_recovery;
+        }
+        if !self.features.completion {
+            return false;
         }
         if input.len() < 2 {
             return false;
@@ -340,6 +345,11 @@ mod tests {
             min_local_candidates: 2,
             min_local_confidence: 0.6,
             debounce_ms: 300,
+            features: AiFeaturesConfig {
+                error_recovery: true,
+                completion: true,
+                nl_generation: true,
+            },
         }
     }
 

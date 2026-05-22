@@ -879,6 +879,8 @@ async fn test_ai_disabled_local_suggestions_work() {
 async fn test_ai_timeout_returns_local_suggestions() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.ai.timeout_ms = 500;
     config.context.repo_detect = false;
@@ -952,6 +954,8 @@ async fn test_ai_timeout_returns_local_suggestions() {
 async fn test_ai_suggestion_merged_into_response() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1005,6 +1009,8 @@ async fn test_ai_suggestion_merged_into_response() {
 async fn test_ai_debounce_skips_second_request() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 5000;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1079,6 +1085,8 @@ async fn test_ai_debounce_skips_second_request() {
 async fn test_skip_ai_returns_local_only() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1130,6 +1138,8 @@ async fn test_skip_ai_returns_local_only() {
 async fn test_skip_ai_fast_response_with_slow_provider() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1183,6 +1193,8 @@ async fn test_skip_ai_fast_response_with_slow_provider() {
 async fn test_skip_ai_false_still_calls_ai() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1236,6 +1248,8 @@ async fn test_skip_ai_false_still_calls_ai() {
 async fn test_skip_ai_false_risk_warning_still_skips_ai() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1287,6 +1301,8 @@ async fn test_skip_ai_false_risk_warning_still_skips_ai() {
 async fn test_skip_ai_false_high_confidence_local_skips_ai() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1360,6 +1376,8 @@ async fn test_skip_ai_false_high_confidence_local_skips_ai() {
 async fn test_ai_not_called_when_local_sufficient() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1426,6 +1444,8 @@ async fn test_ai_not_called_when_local_sufficient() {
 async fn test_ai_called_when_local_insufficient() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1474,6 +1494,8 @@ async fn test_ai_called_when_local_insufficient() {
 async fn test_ai_error_recovery_when_failure_unmatched() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1525,6 +1547,8 @@ async fn test_ai_error_recovery_when_failure_unmatched() {
 async fn test_ai_not_called_when_local_failure_pattern_matches() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1574,6 +1598,8 @@ async fn test_ai_not_called_when_local_failure_pattern_matches() {
 async fn test_need_ai_signal_in_phase1_response() {
     let mut config = AwenConfig::default();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.debounce_ms = 0;
     config.context.repo_detect = false;
     config.context.git_context = false;
@@ -1718,6 +1744,8 @@ async fn test_nl_generate_empty_query_returns_none() {
 async fn test_nl_generate_with_ai_provider() {
     let mut config = test_config();
     config.ai.enabled = true;
+    config.ai.features.completion = true;
+    config.ai.features.error_recovery = true;
     config.ai.timeout_ms = 5000;
 
     let provider = Arc::new(FastMockProvider::new());

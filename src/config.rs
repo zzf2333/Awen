@@ -24,6 +24,15 @@ pub struct AiConfig {
     pub cache_ttl_minutes: u32,
     pub min_local_candidates: usize,
     pub min_local_confidence: f64,
+    pub features: AiFeaturesConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiFeaturesConfig {
+    pub error_recovery: bool,
+    pub completion: bool,
+    pub nl_generation: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +48,7 @@ pub struct ContextConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiConfig {
+    pub mode: UiMode,
     pub ghost_text_color: u8,
     pub dropdown_max_items: usize,
     pub hint_style: String,
@@ -46,10 +56,18 @@ pub struct UiConfig {
     pub command_explanation: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UiMode {
+    #[default]
+    Minimal,
+    Full,
+}
+
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             base_url: "https://api.deepseek.com".into(),
             model: "deepseek-chat".into(),
             api_key: String::new(),
@@ -59,6 +77,17 @@ impl Default for AiConfig {
             cache_ttl_minutes: 30,
             min_local_candidates: 2,
             min_local_confidence: 0.6,
+            features: AiFeaturesConfig::default(),
+        }
+    }
+}
+
+impl Default for AiFeaturesConfig {
+    fn default() -> Self {
+        Self {
+            error_recovery: true,
+            completion: false,
+            nl_generation: true,
         }
     }
 }
@@ -70,7 +99,7 @@ impl Default for ContextConfig {
             stderr_max_chars: 500,
             repo_detect: true,
             git_context: true,
-            capture_stderr: true,
+            capture_stderr: false,
         }
     }
 }
@@ -78,6 +107,7 @@ impl Default for ContextConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
+            mode: UiMode::default(),
             ghost_text_color: 242,
             dropdown_max_items: 8,
             hint_style: "above".into(),
@@ -189,15 +219,19 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = AwenConfig::default();
-        assert!(config.ai.enabled);
+        assert!(!config.ai.enabled);
         assert_eq!(config.ai.base_url, "https://api.deepseek.com");
         assert_eq!(config.ai.model, "deepseek-chat");
         assert!(config.ai.api_key.is_empty());
         assert_eq!(config.ai.debounce_ms, 300);
         assert_eq!(config.ai.min_local_candidates, 2);
         assert!((config.ai.min_local_confidence - 0.6).abs() < f64::EPSILON);
+        assert!(config.ai.features.error_recovery);
+        assert!(!config.ai.features.completion);
+        assert!(config.ai.features.nl_generation);
         assert_eq!(config.context.session_history_size, 20);
-        assert!(config.context.capture_stderr);
+        assert!(!config.context.capture_stderr);
+        assert_eq!(config.ui.mode, UiMode::Minimal);
         assert_eq!(config.ui.ghost_text_color, 242);
         assert!(!config.ui.command_explanation);
     }
@@ -253,7 +287,7 @@ enabled = false
     #[test]
     fn test_empty_config() {
         let config: AwenConfig = load_config_from_str("").unwrap();
-        assert!(config.ai.enabled);
+        assert!(!config.ai.enabled);
         assert_eq!(config.ai.model, "deepseek-chat");
     }
 
