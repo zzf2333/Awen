@@ -13,6 +13,7 @@ _awen_accept() {
         POSTDISPLAY=""
         _awen_clear_hint
         zle -R
+        _awen_suggest_local
     elif [[ -n "$_AWEN_SUGGESTION" ]]; then
         _awen_cancel_pending_ai
         _awen_hl_clear
@@ -23,6 +24,7 @@ _awen_accept() {
         POSTDISPLAY=""
         _awen_clear_hint
         zle -R
+        _awen_suggest_local
     else
         zle forward-char
     fi
@@ -195,6 +197,7 @@ _awen_menu_accept() {
         POSTDISPLAY=""
         _awen_clear_hint
         zle -R
+        _awen_suggest_local
     else
         _awen_cancel_pending_ai
         _awen_hl_clear
