@@ -115,11 +115,6 @@ awen_init() {
         _AWEN_MENU_ACTIVE=0
         _AWEN_MENU_COUNT=0
         _AWEN_SUGGESTION=""
-        if zle 2>/dev/null; then
-            _awen_hl_clear
-            POSTDISPLAY=""
-            zle -R
-        fi
     ' WINCH
 
     typeset -ga _AWEN_CONFLICTS=()
