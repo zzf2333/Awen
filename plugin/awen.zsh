@@ -75,6 +75,16 @@ awen_init() {
         return 1
     fi
 
+    typeset -g _AWEN_VERSION=""
+    local ver_out
+    ver_out=$("$_AWEN_BIN" --version 2>/dev/null)
+    _AWEN_VERSION="${ver_out#awen }"
+    if [[ -n "$_AWEN_VERSION" ]]; then
+        typeset -g _AWEN_LOGO="Awen v${_AWEN_VERSION}"
+    else
+        typeset -g _AWEN_LOGO="Awen"
+    fi
+
     if command -v jq &>/dev/null; then
         typeset -g _AWEN_HAS_JQ=1
     else
