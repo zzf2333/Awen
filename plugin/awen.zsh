@@ -111,25 +111,14 @@ awen_init() {
 
     _awen_ensure_daemon
 
-    _awen_on_resize_widget() {
-        if (( _AWEN_MENU_ACTIVE )); then
-            _awen_menu_reset
-        fi
-        _awen_hl_clear
-        POSTDISPLAY=""
-        _AWEN_SUGGESTION=""
-        if [[ -n "$BUFFER" ]]; then
-            _awen_suggest_local
-        fi
-        zle -R
-    }
-    zle -N _awen_on_resize_widget
-
     trap '
         _AWEN_MENU_ACTIVE=0
+        _AWEN_MENU_COUNT=0
         _AWEN_SUGGESTION=""
         if zle 2>/dev/null; then
-            zle _awen_on_resize_widget
+            _awen_hl_clear
+            POSTDISPLAY=""
+            zle -R
         fi
     ' WINCH
 
