@@ -111,6 +111,7 @@ awen logs               # Show recent logs
 awen config             # Show configuration
 awen context            # Show current context state
 awen history import     # Import zsh history
+awen uninstall          # Remove all data, config, and shell integration
 ```
 
 ## Configuration

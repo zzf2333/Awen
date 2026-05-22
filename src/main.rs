@@ -47,6 +47,12 @@ enum Commands {
         #[command(subcommand)]
         action: HistoryAction,
     },
+    /// Remove all Awen data, config, and shell integration
+    Uninstall {
+        /// Skip confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -87,6 +93,7 @@ async fn main() {
             HistoryAction::Stats => cmd_history_stats(),
             HistoryAction::Clear { yes } => cmd_history_clear(yes),
         },
+        Commands::Uninstall { yes } => cmd_uninstall(yes).await,
     }
 }
 
@@ -413,6 +420,96 @@ fn find_plugin() -> Option<PathBuf> {
         return Some(local);
     }
     None
+}
+
+async fn cmd_uninstall(yes: bool) {
+    if !yes {
+        eprintln!("this will remove all Awen data, config, and shell integration.");
+        eprint!("continue? [y/N] ");
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_err()
+            || !input.trim().eq_ignore_ascii_case("y")
+        {
+            println!("aborted");
+            return;
+        }
+    }
+
+    // 1. Stop daemon
+    if daemon::is_running() {
+        daemon::send_shutdown().await.ok();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        if daemon::is_running() {
+            if let Some(pid) = daemon::read_pid() {
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGTERM);
+                }
+            }
+        }
+        daemon::cleanup_socket();
+        println!("[1/4] daemon: stopped");
+    } else {
+        println!("[1/4] daemon: not running");
+    }
+
+    // 2. Remove source line from .zshrc
+    let home = dirs::home_dir().unwrap_or_default();
+    let zshrc = home.join(".zshrc");
+    if zshrc.exists() {
+        if let Ok(content) = std::fs::read_to_string(&zshrc) {
+            let filtered: Vec<&str> = content
+                .lines()
+                .filter(|line| {
+                    let trimmed = line.trim();
+                    !trimmed.contains("awen.zsh")
+                        && trimmed != "# Awen — Terminal Intelligence Layer"
+                })
+                .collect();
+            let new_content = filtered.join("\n") + "\n";
+            if new_content.len() != content.len() {
+                match std::fs::write(&zshrc, &new_content) {
+                    Ok(()) => println!("[2/4] shell: removed source line from {}", zshrc.display()),
+                    Err(e) => eprintln!("[2/4] shell: failed to update {}: {e}", zshrc.display()),
+                }
+            } else {
+                println!("[2/4] shell: no awen lines found in {}", zshrc.display());
+            }
+        }
+    } else {
+        println!("[2/4] shell: {} not found", zshrc.display());
+    }
+
+    // 3. Remove config directory
+    let config_dir = config::config_dir();
+    if config_dir.exists() {
+        match std::fs::remove_dir_all(&config_dir) {
+            Ok(()) => println!("[3/4] config: removed {}", config_dir.display()),
+            Err(e) => eprintln!("[3/4] config: failed to remove {}: {e}", config_dir.display()),
+        }
+    } else {
+        println!("[3/4] config: {} not found", config_dir.display());
+    }
+
+    // 4. Remove data directory
+    let data_dir = config::data_dir();
+    if data_dir.exists() {
+        match std::fs::remove_dir_all(&data_dir) {
+            Ok(()) => println!("[4/4] data: removed {}", data_dir.display()),
+            Err(e) => eprintln!("[4/4] data: failed to remove {}: {e}", data_dir.display()),
+        }
+    } else {
+        println!("[4/4] data: {} not found", data_dir.display());
+    }
+
+    // Cleanup runtime files
+    let socket = config::socket_path();
+    let pid = config::pid_path();
+    std::fs::remove_file(&socket).ok();
+    std::fs::remove_file(&pid).ok();
+
+    println!();
+    println!("awen uninstalled. if installed via brew, also run:");
+    println!("  brew uninstall zzf2333/tap/awen");
 }
 
 async fn cmd_context() {

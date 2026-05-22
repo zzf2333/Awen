@@ -111,6 +111,7 @@ awen logs               # 查看最近日志
 awen config             # 查看配置
 awen context            # 查看当前上下文状态
 awen history import     # 导入 zsh 历史
+awen uninstall          # 移除所有数据、配置和 shell 集成
 ```
 
 ## 配置
