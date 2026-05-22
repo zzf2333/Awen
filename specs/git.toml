@@ -67,6 +67,35 @@ name = "--branch"
 short = "-b"
 arg = "BRANCH"
 description = "Create and switch to new branch"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force switch, discard local changes"
+[[command.subcommands.flags]]
+name = "--track"
+short = "-t"
+description = "Set up tracking for new branch"
+[[command.subcommands.flags]]
+name = "--detach"
+description = "Detach HEAD at named commit"
+[[command.subcommands.flags]]
+name = "--merge"
+short = "-m"
+description = "Merge local modifications into new branch"
+[[command.subcommands.flags]]
+name = "--orphan"
+arg = "BRANCH"
+description = "Create a new orphan branch"
+[[command.subcommands.flags]]
+name = "--ours"
+description = "Checkout our version for unmerged files"
+[[command.subcommands.flags]]
+name = "--theirs"
+description = "Checkout their version for unmerged files"
+[[command.subcommands.flags]]
+name = "--patch"
+short = "-p"
+description = "Interactively select hunks to discard"
 
 [[command.subcommands]]
 name = "branch"
