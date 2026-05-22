@@ -40,6 +40,23 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 | **Natural Language** | Type `# find large files` → get the shell command | async |
 | **Context Awareness** | Tracks git state, project type, session history, last exit code | always |
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><b>History + Specs Dropdown</b><br/><img src="docs/history.png" width="500" /></td>
+<td width="50%"><b>Command Specs (Flags)</b><br/><img src="docs/options.png" width="500" /></td>
+</tr>
+<tr>
+<td><b>File Path Ghost Text</b><br/><img src="docs/cd.png" width="500" /></td>
+<td><b>Risk Warning Panel</b><br/><img src="docs/warning.png" width="500" /></td>
+</tr>
+<tr>
+<td><b>Failure Recovery Panel</b><br/><img src="docs/fix.png" width="500" /></td>
+<td><b>AI Suggestions</b><br/><img src="docs/ai.png" width="500" /></td>
+</tr>
+</table>
+
 ## Install
 
 ### Homebrew (macOS / Linux)
