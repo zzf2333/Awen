@@ -47,7 +47,9 @@ _awen_render_ghost() {
     if [[ "$full_suggestion" == "$BUFFER"* ]]; then
         local ghost_part="${full_suggestion#$BUFFER}"
         if [[ -n "$ghost_part" ]]; then
-            local prompt_width=${#${(%%)PROMPT}}
+            local _expanded_prompt="${(%%)PROMPT}"
+            local _last_line="${_expanded_prompt##*$'\n'}"
+            local prompt_width=${#_last_line}
             local available=$(( COLUMNS - prompt_width - ${#BUFFER} - 1 ))
             if (( available > 2 && ${#ghost_part} > available )); then
                 ghost_part="${ghost_part[1,$((available - 1))]}…"
