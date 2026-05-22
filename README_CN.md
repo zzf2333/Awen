@@ -71,15 +71,26 @@ cd Awen
 
 ## 使用
 
+### 交互模式
+
+Awen 提供两种交互模式，通过 `[ui] mode` 配置或 `AWEN_UI_MODE` 环境变量切换：
+
+**Minimal（默认）** — 仅 ghost text，类似 zsh-autosuggestions。无下拉菜单、无面板。Up/Down/Enter 直通 shell。最轻量。
+
+**Full** — 下拉菜单带来源标签、风险面板、失败修复面板。Tab 循环、Up/Down 导航、Enter 确认。
+
+如果检测到 zsh-autosuggestions 或 fzf，Awen 自动降级到 minimal 模式以避免快捷键冲突。
+
 ### 快捷键
 
-| 按键 | 操作 |
-| :--- | :--- |
-| `→` | 接受完整 ghost text |
-| `Ctrl+→` | 接受下一个词 |
-| `↑↓` | 在建议菜单中导航 |
-| `Enter` | 接受选中的建议 |
-| `Esc` | 关闭 |
+| 按键 | Minimal | Full | 操作 |
+| :--- | :---: | :---: | :--- |
+| `→` | ✓ | ✓ | 接受完整 ghost text |
+| `Ctrl+→` | ✓ | ✓ | 接受下一个词 |
+| `Esc` | ✓ | ✓ | 关闭 |
+| `↑↓` | — | ✓ | 在建议菜单中导航 |
+| `Enter` | — | ✓ | 接受选中的建议 |
+| `Tab` | ✓ | ✓ | 接受 / 循环 |
 
 ### 自然语言
 
@@ -135,6 +146,7 @@ git_context = true              # 采集 git 上下文
 capture_stderr = true           # 捕获 stderr 用于失败修复
 
 [ui]
+mode = "minimal"                # "minimal"（仅 ghost text）或 "full"（菜单 + 面板）
 ghost_text_color = 242          # ghost text 颜色（ANSI 256）
 hint_style = "above"            # 提示位置："above" 或 "below"
 dropdown_max_items = 8          # 建议菜单最大条目
