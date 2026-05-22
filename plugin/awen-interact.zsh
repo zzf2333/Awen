@@ -187,24 +187,16 @@ _awen_menu_down() {
 }
 
 _awen_menu_accept() {
+    _awen_cancel_pending_ai
     if (( _AWEN_MENU_ACTIVE )); then
-        _awen_cancel_pending_ai
         BUFFER="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
         CURSOR=${#BUFFER}
-        _awen_hl_clear
-        _awen_menu_reset
-        _AWEN_SUGGESTION=""
-        _AWEN_NL_MODE=0
-        POSTDISPLAY=""
-        _awen_clear_hint
-        zle -R
-    else
-        _awen_cancel_pending_ai
-        _awen_hl_clear
-        _awen_menu_reset
-        _AWEN_SUGGESTION=""
-        POSTDISPLAY=""
-        _awen_clear_hint
-        zle accept-line
     fi
+    _awen_hl_clear
+    _awen_menu_reset
+    _AWEN_SUGGESTION=""
+    _AWEN_NL_MODE=0
+    POSTDISPLAY=""
+    _awen_clear_hint
+    zle accept-line
 }
