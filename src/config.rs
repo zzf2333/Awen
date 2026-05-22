@@ -64,6 +64,15 @@ pub enum UiMode {
     Full,
 }
 
+impl std::fmt::Display for UiMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UiMode::Minimal => write!(f, "minimal"),
+            UiMode::Full => write!(f, "full"),
+        }
+    }
+}
+
 impl Default for AiConfig {
     fn default() -> Self {
         Self {

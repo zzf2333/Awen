@@ -48,6 +48,7 @@ typeset -g  _AWEN_MENU_COUNT=0
 typeset -g  _AWEN_MENU_MAX="${AWEN_MENU_MAX_ITEMS:-5}"
 typeset -g  _AWEN_MENU_ENABLED="${AWEN_MENU_ENABLED:-1}"
 typeset -g  _AWEN_STDERR_MAX="${AWEN_STDERR_MAX_CHARS:-500}"
+typeset -g  _AWEN_UI_MODE="${AWEN_UI_MODE:-minimal}"
 
 # Extract a JSON string value, handling escaped quotes
 _awen_extract_json_value() {
@@ -313,9 +314,22 @@ _awen_render_ghost() {
     if [[ "$full_suggestion" == "$BUFFER"* ]]; then
         local ghost_part="${full_suggestion#$BUFFER}"
         if [[ -n "$ghost_part" ]]; then
-            POSTDISPLAY="$ghost_part"
-            _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
-            region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
+            # Truncate ghost if it would overflow terminal width
+            local prompt_width=${#${(%%)PROMPT}}
+            local available=$(( COLUMNS - prompt_width - ${#BUFFER} - 1 ))
+            if (( available > 2 && ${#ghost_part} > available )); then
+                ghost_part="${ghost_part[1,$((available - 1))]}…"
+            elif (( available <= 2 )); then
+                ghost_part=""
+            fi
+
+            if [[ -n "$ghost_part" ]]; then
+                POSTDISPLAY="$ghost_part"
+                _AWEN_GHOST_HIGHLIGHT="$#BUFFER $(( $#BUFFER + $#ghost_part )) $_AWEN_GHOST_STYLE"
+                region_highlight+=("$_AWEN_GHOST_HIGHLIGHT")
+            else
+                POSTDISPLAY=""
+            fi
         else
             POSTDISPLAY=""
         fi
@@ -842,6 +856,20 @@ _awen_apply_response() {
     _AWEN_WARNING="$warning_text"
     _AWEN_HINT="$hint_text"
 
+    # Parse ui_mode from daemon (env var takes precedence)
+    if [[ -z "${AWEN_UI_MODE:-}" ]]; then
+        local response_mode=""
+        if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+            response_mode=$(printf '%s\n' "$response" | jq -r '.ui_mode // empty' 2>/dev/null)
+        else
+            if [[ "$response" == *'"ui_mode":"'* ]]; then
+                local tmp="${response#*\"ui_mode\":\"}"
+                response_mode="${tmp%%\"*}"
+            fi
+        fi
+        [[ -n "$response_mode" ]] && _AWEN_UI_MODE="$response_mode"
+    fi
+
     # Parse need_ai signal from daemon
     if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
         _AWEN_NEED_AI=$(printf '%s\n' "$response" | jq -r '.need_ai // "false"' 2>/dev/null)
@@ -913,27 +941,47 @@ _awen_apply_response() {
         done
     fi
 
-    if [[ -n "$_AWEN_WARNING" ]]; then
-        _awen_render_risk_panel "$_AWEN_WARNING"
-    elif (( failure_idx > 0 )); then
-        _AWEN_MENU_COUNT=$count
-        _awen_render_failure_panel "$failure_idx"
-    elif [[ "$_AWEN_MENU_ENABLED" == "1" && $count -ge 2 ]]; then
-        _AWEN_MENU_COUNT=$count
-        _AWEN_MENU_INDEX=1
-        _AWEN_MENU_ACTIVE=1
-        _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[1]}"
-        _awen_render_menu
-    elif [[ $count -ge 1 ]]; then
-        local single_text="${_AWEN_MENU_TEXTS[1]}"
-        local single_source="${_AWEN_MENU_SOURCES[1]}"
-        _awen_menu_reset
-        _awen_render_ghost "$single_text" "$single_source"
+    if [[ "$_AWEN_UI_MODE" == "minimal" ]]; then
+        # Minimal mode: ghost text only, warnings as inline hint
+        if [[ -n "$_AWEN_WARNING" ]]; then
+            zle -M "⚠ $_AWEN_WARNING"
+        fi
+        if (( failure_idx > 0 )); then
+            _awen_menu_reset
+            _awen_render_ghost "${_AWEN_MENU_TEXTS[$failure_idx]}" "${_AWEN_MENU_SOURCES[$failure_idx]}"
+        elif [[ $count -ge 1 ]]; then
+            _awen_menu_reset
+            _awen_render_ghost "${_AWEN_MENU_TEXTS[1]}" "${_AWEN_MENU_SOURCES[1]}"
+        else
+            _awen_menu_reset
+            _awen_remove_ghost_highlight
+            POSTDISPLAY=""
+            _AWEN_SUGGESTION=""
+        fi
     else
-        _awen_menu_reset
-        _awen_remove_ghost_highlight
-        POSTDISPLAY=""
-        _AWEN_SUGGESTION=""
+        # Full mode: risk panel, failure panel, menu, ghost
+        if [[ -n "$_AWEN_WARNING" ]]; then
+            _awen_render_risk_panel "$_AWEN_WARNING"
+        elif (( failure_idx > 0 )); then
+            _AWEN_MENU_COUNT=$count
+            _awen_render_failure_panel "$failure_idx"
+        elif [[ "$_AWEN_MENU_ENABLED" == "1" && $count -ge 2 ]]; then
+            _AWEN_MENU_COUNT=$count
+            _AWEN_MENU_INDEX=1
+            _AWEN_MENU_ACTIVE=1
+            _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[1]}"
+            _awen_render_menu
+        elif [[ $count -ge 1 ]]; then
+            local single_text="${_AWEN_MENU_TEXTS[1]}"
+            local single_source="${_AWEN_MENU_SOURCES[1]}"
+            _awen_menu_reset
+            _awen_render_ghost "$single_text" "$single_source"
+        else
+            _awen_menu_reset
+            _awen_remove_ghost_highlight
+            POSTDISPLAY=""
+            _AWEN_SUGGESTION=""
+        fi
     fi
 
     if [[ -z "$_AWEN_WARNING" ]]; then
@@ -1431,6 +1479,33 @@ awen_init() {
 
     _awen_ensure_daemon
 
+    # SIGWINCH: clean up UI on terminal resize
+    _awen_on_resize() {
+        if (( _AWEN_MENU_ACTIVE )); then
+            _awen_menu_reset
+        fi
+        _awen_remove_ghost_highlight
+        POSTDISPLAY=""
+        _AWEN_SUGGESTION=""
+        if [[ -n "$BUFFER" ]] && zle 2>/dev/null; then
+            zle _awen_suggest_local
+        fi
+    }
+    trap '_awen_on_resize' WINCH
+
+    # Detect conflicting plugins and auto-degrade to minimal mode
+    typeset -ga _AWEN_CONFLICTS=()
+    if (( $+functions[_zsh_autosuggest_start] )) || [[ -n "${ZSH_AUTOSUGGEST_STRATEGY:-}" ]]; then
+        _AWEN_CONFLICTS+=(zsh-autosuggestions)
+    fi
+    if (( $+widgets[fzf-history-widget] )) || (( $+functions[fzf-history-widget] )); then
+        _AWEN_CONFLICTS+=(fzf)
+    fi
+    if (( ${#_AWEN_CONFLICTS} > 0 )) && [[ "$_AWEN_UI_MODE" == "full" ]]; then
+        _AWEN_UI_MODE="minimal"
+        echo "awen: detected ${(j:, :)_AWEN_CONFLICTS} — switching to minimal mode" >&2
+    fi
+
     # Register ZLE widgets
     zle -N _awen_self_insert
     zle -N _awen_backward_delete_char
@@ -1447,6 +1522,7 @@ awen_init() {
 
     # Keybinding setup (disable with AWEN_ENABLE_KEYBIND_OVERRIDE=0)
     if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then
+        # Core bindings (both modes): ghost accept + dismiss
         bindkey -M main '\e[C' _awen_accept          # Right arrow
         bindkey -M main '\eOC' _awen_accept          # Right arrow (application mode)
         bindkey -M main '\e[1;5C' _awen_accept_word  # Ctrl+Right
@@ -1454,14 +1530,16 @@ awen_init() {
         bindkey -M main '\e\e[C' _awen_accept_word   # Alt+Right (fallback)
         bindkey -M main '\e[Z' _awen_dismiss          # Shift+Tab dismiss
 
-        # Menu navigation (fallthrough to defaults when menu inactive)
-        bindkey -M main '\e[A' _awen_menu_up           # Up arrow
-        bindkey -M main '\eOA' _awen_menu_up           # Up arrow (application mode)
-        bindkey -M main '\e[B' _awen_menu_down         # Down arrow
-        bindkey -M main '\eOB' _awen_menu_down         # Down arrow (application mode)
-        bindkey -M main '^M' _awen_menu_accept         # Enter
+        # Full mode only: menu navigation (Up/Down/Enter)
+        if [[ "$_AWEN_UI_MODE" != "minimal" ]]; then
+            bindkey -M main '\e[A' _awen_menu_up           # Up arrow
+            bindkey -M main '\eOA' _awen_menu_up           # Up arrow (application mode)
+            bindkey -M main '\e[B' _awen_menu_down         # Down arrow
+            bindkey -M main '\eOB' _awen_menu_down         # Down arrow (application mode)
+            bindkey -M main '^M' _awen_menu_accept         # Enter
+        fi
 
-        # Override self-insert to trigger suggestions on every keystroke
+        # Self-insert: trigger suggestions on every keystroke (both modes)
         local -a printable
         printable=({a..z} {A..Z} {0..9} ' ' '-' '_' '.' '/' '~' ':' '=' '+' '@' ',' ';' '!' '?' '#' '$' '%' '^' '&' '*' '(' ')' '[' ']' '{' '}' '<' '>' '|' "'" '"' '`' '\\')
         local key

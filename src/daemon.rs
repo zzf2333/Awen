@@ -224,7 +224,7 @@ async fn process_request(
 }
 
 async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
-    let (local, ai_params, decision) = {
+    let (local, ai_params, decision, ui_mode) = {
         let mut st = state.lock().await;
 
         let local = {
@@ -262,11 +262,14 @@ async fn handle_suggest(req: SuggestRequest, state: &Arc<Mutex<DaemonState>>) ->
             st.last_ai_request_at = Some(std::time::Instant::now());
         }
 
-        (local, ai_params, decision)
+        let ui_mode = st.config.ui.mode.to_string();
+
+        (local, ai_params, decision, ui_mode)
     };
 
-    let response =
+    let mut response =
         SuggestionPipeline::execute(local, decision, ai_params, &req.input, &req.context).await;
+    response.ui_mode = Some(ui_mode);
 
     Response::Suggest(response)
 }

@@ -26,6 +26,7 @@ impl Arbitrator {
             hint,
             warning,
             need_ai: false,
+            ui_mode: None,
         }
     }
 
@@ -246,6 +247,7 @@ mod tests {
             hint: None,
             warning: None,
             need_ai: false,
+            ui_mode: None,
         };
 
         let ai = make_suggestion("ls -la --color", SuggestionSource::Ai, 0.9);
@@ -266,6 +268,7 @@ mod tests {
             hint: None,
             warning: None,
             need_ai: false,
+            ui_mode: None,
         };
 
         let ai = make_suggestion("docker run", SuggestionSource::Ai, 0.9);
