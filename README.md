@@ -131,7 +131,7 @@ rm ~/.local/bin/awen
 
 Awen has two interaction modes, configured via `[ui] mode` in config or `AWEN_UI_MODE` env var:
 
-**Full (default)** — dropdown menu with source labels, risk panels, failure recovery panels. Tab cycles, Up/Down navigate, Enter accepts.
+**Full (default)** — dropdown menu with source labels, risk panels, failure recovery panels. Up/Down navigate, Enter runs, Tab accepts for editing. Filesystem completions appear as ghost text only, never in the dropdown menu.
 
 **Minimal** — ghost text only, like zsh-autosuggestions. No dropdown menu, no panels. Up/Down/Enter pass through to the shell. Lightest footprint.
 
@@ -143,10 +143,9 @@ If zsh-autosuggestions or fzf are detected, Awen automatically downgrades to min
 | :--- | :---: | :---: | :--- |
 | `→` | ✓ | ✓ | Accept full ghost text |
 | `Ctrl+→` | ✓ | ✓ | Accept next word |
-| `Esc` | ✓ | ✓ | Dismiss |
 | `↑↓` | — | ✓ | Navigate suggestion menu |
-| `Enter` | — | ✓ | Accept selected suggestion |
-| `Tab` | ✓ | ✓ | Accept / cycle |
+| `Enter` | — | ✓ | Run selected suggestion |
+| `Tab` | ✓ | ✓ | Accept into command line for editing |
 
 ### Natural Language
 
@@ -300,6 +299,7 @@ src/
     ├── ai.rs            # DeepSeek / Ollama providers
     ├── failure.rs       # Stderr → fix suggestion
     ├── risk.rs          # Input → danger warning
+    ├── filesystem.rs    # Directory/file path completion (ghost-only)
     └── history_import.rs
 plugin/
 ├── awen.zsh             # Entry point: globals, init, module sourcing
