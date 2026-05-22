@@ -439,11 +439,11 @@ async fn cmd_uninstall(yes: bool) {
     if daemon::is_running() {
         daemon::send_shutdown().await.ok();
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        if daemon::is_running() {
-            if let Some(pid) = daemon::read_pid() {
-                unsafe {
-                    libc::kill(pid as i32, libc::SIGTERM);
-                }
+        if daemon::is_running()
+            && let Some(pid) = daemon::read_pid()
+        {
+            unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
             }
         }
         daemon::cleanup_socket();
@@ -484,7 +484,10 @@ async fn cmd_uninstall(yes: bool) {
     if config_dir.exists() {
         match std::fs::remove_dir_all(&config_dir) {
             Ok(()) => println!("[3/4] config: removed {}", config_dir.display()),
-            Err(e) => eprintln!("[3/4] config: failed to remove {}: {e}", config_dir.display()),
+            Err(e) => eprintln!(
+                "[3/4] config: failed to remove {}: {e}",
+                config_dir.display()
+            ),
         }
     } else {
         println!("[3/4] config: {} not found", config_dir.display());
