@@ -213,6 +213,16 @@ pub fn load_config() -> AwenConfig {
                 tracing::warn!("failed to read config: {e}, using defaults");
             }
         }
+    } else {
+        let dir = config_dir();
+        std::fs::create_dir_all(&dir).ok();
+        let default = AwenConfig::default();
+        if let Ok(content) = toml::to_string_pretty(&default) {
+            if std::fs::write(&path, &content).is_ok() {
+                tracing::info!("created default config at {}", path.display());
+            }
+        }
+        return default;
     }
     AwenConfig::default()
 }
