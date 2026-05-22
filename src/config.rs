@@ -87,7 +87,7 @@ impl Default for AiFeaturesConfig {
         Self {
             error_recovery: true,
             completion: false,
-            nl_generation: true,
+            nl_generation: false,
         }
     }
 }
@@ -228,7 +228,7 @@ mod tests {
         assert!((config.ai.min_local_confidence - 0.6).abs() < f64::EPSILON);
         assert!(config.ai.features.error_recovery);
         assert!(!config.ai.features.completion);
-        assert!(config.ai.features.nl_generation);
+        assert!(!config.ai.features.nl_generation);
         assert_eq!(config.context.session_history_size, 20);
         assert!(!config.context.capture_stderr);
         assert_eq!(config.ui.mode, UiMode::Minimal);

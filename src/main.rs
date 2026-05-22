@@ -37,7 +37,11 @@ enum Commands {
     /// Show current context engine state
     Context,
     /// Configure shell integration (add source line to ~/.zshrc)
-    Setup,
+    Setup {
+        /// Skip confirmation before modifying ~/.zshrc
+        #[arg(long)]
+        yes: bool,
+    },
     /// Manage command history
     History {
         #[command(subcommand)]
@@ -77,7 +81,7 @@ async fn main() {
         Commands::Logs { lines } => cmd_logs(lines),
         Commands::Config => cmd_config(),
         Commands::Context => cmd_context().await,
-        Commands::Setup => cmd_setup().await,
+        Commands::Setup { yes } => cmd_setup(yes).await,
         Commands::History { action } => match action {
             HistoryAction::Import { file, force } => cmd_history_import(file, force),
             HistoryAction::Stats => cmd_history_stats(),
@@ -276,7 +280,7 @@ fn cmd_history_clear(yes: bool) {
     }
 }
 
-async fn cmd_setup() {
+async fn cmd_setup(yes: bool) {
     let config_dir = config::config_dir();
     let data_dir = config::data_dir();
     std::fs::create_dir_all(&config_dir).ok();
@@ -318,6 +322,23 @@ async fn cmd_setup() {
     {
         println!("[2/4] shell: already configured in {}", zshrc.display());
     } else {
+        if !yes {
+            eprint!(
+                "[2/4] shell: add source line to {}? [y/N] ",
+                zshrc.display()
+            );
+            let mut input = String::new();
+            if std::io::stdin().read_line(&mut input).is_err()
+                || !input.trim().eq_ignore_ascii_case("y")
+            {
+                println!("[2/4] shell: skipped (use --yes to auto-confirm)");
+                println!();
+                println!("to configure manually, add this to your ~/.zshrc:");
+                println!("  source {}", plugin_path.display());
+                return;
+            }
+        }
+
         let source_line = format!(
             "\n# Awen — Terminal Intelligence Layer\nsource {}\n",
             plugin_path.display()

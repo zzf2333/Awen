@@ -1746,6 +1746,7 @@ async fn test_nl_generate_with_ai_provider() {
     config.ai.enabled = true;
     config.ai.features.completion = true;
     config.ai.features.error_recovery = true;
+    config.ai.features.nl_generation = true;
     config.ai.timeout_ms = 5000;
 
     let provider = Arc::new(FastMockProvider::new());
