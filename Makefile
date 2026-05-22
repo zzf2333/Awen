@@ -35,7 +35,7 @@ sync-bin-release:
 # Sync plugin + specs only (no rebuild, for zsh-only changes)
 sync:
 	@mkdir -p $(CONFIG_DIR)/specs
-	cp plugin/awen.zsh $(CONFIG_DIR)/awen.zsh
+	cp plugin/awen*.zsh $(CONFIG_DIR)/
 	cp specs/*.toml $(CONFIG_DIR)/specs/
 
 # Restart daemon (stop if running, start fresh)
