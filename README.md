@@ -1,6 +1,5 @@
 <div align="center">
   <img src="docs/logo.png" alt="Awen Logo" />
-  <h1>Awen</h1>
   <p><b>Terminal Intelligence Layer — Smart when you need it. Silent when you don't.</b></p>
   <a href="https://github.com/zzf2333/Awen/releases"><img src="https://img.shields.io/github/v/tag/zzf2333/Awen?label=version&style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
@@ -29,16 +28,16 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 
 ## Features
 
-| Feature | What it does | Speed |
-| :--- | :--- | :--- |
-| **Ghost Text** | Inline completion from history + command specs | <5ms |
-| **File Completion** | Warp-style directory/file path completion with fuzzy match | <10ms |
-| **Failure Recovery** | Detects 18 error patterns, suggests the fix | instant |
-| **Risk Detection** | Warns on 24 dangerous command patterns before you hit Enter | instant |
-| **Command Specs** | 77 built-in specs — subcommands, flags, descriptions | <20ms |
-| **AI Completion** | DeepSeek / Ollama as async fallback when local isn't enough | async |
-| **Natural Language** | Type `# find large files` → get the shell command | async |
-| **Context Awareness** | Tracks git state, project type, session history, last exit code | always |
+| Feature               | What it does                                                    | Speed   |
+| :-------------------- | :-------------------------------------------------------------- | :------ |
+| **Ghost Text**        | Inline completion from history + command specs                  | <5ms    |
+| **File Completion**   | Warp-style directory/file path completion with fuzzy match      | <10ms   |
+| **Failure Recovery**  | Detects 18 error patterns, suggests the fix                     | instant |
+| **Risk Detection**    | Warns on 24 dangerous command patterns before you hit Enter     | instant |
+| **Command Specs**     | 77 built-in specs — subcommands, flags, descriptions            | <20ms   |
+| **AI Completion**     | DeepSeek / Ollama as async fallback when local isn't enough     | async   |
+| **Natural Language**  | Type `# find large files` → get the shell command               | async   |
+| **Context Awareness** | Tracks git state, project type, session history, last exit code | always  |
 
 ## Screenshots
 
@@ -120,6 +119,7 @@ awen uninstall
 ```
 
 This will:
+
 - Stop the daemon
 - Remove the `source` line from `~/.zshrc`
 - Delete `~/.config/awen/` (config, specs, plugin)
@@ -156,13 +156,13 @@ If zsh-autosuggestions or fzf are detected, Awen automatically downgrades to min
 
 ### Keybindings
 
-| Key | Minimal | Full | Action |
-| :--- | :---: | :---: | :--- |
-| `→` | ✓ | ✓ | Accept full ghost text |
-| `Ctrl+→` | ✓ | ✓ | Accept next word |
-| `↑↓` | — | ✓ | Navigate suggestion menu |
-| `Enter` | — | ✓ | Run selected suggestion |
-| `Tab` | ✓ | ✓ | Accept into command line for editing |
+| Key      | Minimal | Full | Action                               |
+| :------- | :-----: | :--: | :----------------------------------- |
+| `→`      |    ✓    |  ✓   | Accept full ghost text               |
+| `Ctrl+→` |    ✓    |  ✓   | Accept next word                     |
+| `↑↓`     |    —    |  ✓   | Navigate suggestion menu             |
+| `Enter`  |    —    |  ✓   | Run selected suggestion              |
+| `Tab`    |    ✓    |  ✓   | Accept into command line for editing |
 
 ### Natural Language
 
@@ -225,6 +225,7 @@ hint_style = "above"            # Hint position: "above" or "below"
 dropdown_max_items = 8          # Max items in suggestion menu
 risk_detection = true           # Dangerous command warnings
 ```
+
 </details>
 
 ### Custom Specs
@@ -254,23 +255,24 @@ Add your own patterns in `~/.config/awen/failure_patterns.toml` and `~/.config/a
 <details>
 <summary>Built-in command specs (77)</summary>
 
-| Category | Commands |
-| :--- | :--- |
-| VCS & Dev Ecosystem | `git`, `docker`, `npm`, `cargo`, `brew`, `curl`, `ssh` |
-| Cloud & Infrastructure | `gh`, `kubectl`, `terraform`, `aws`, `gcloud`, `az`, `helm` |
-| Languages & Runtimes | `python`, `go`, `node` |
-| Package Managers | `pip`, `pnpm`, `yarn`, `bun`, `uv`, `poetry`, `cmake`, `make` |
-| AI Tools | `claude`, `codex`, `opencode`, `antigravity` |
-| File Operations | `ls`, `rm`, `cp`, `mv`, `mkdir`, `touch`, `ln`, `chmod`, `chown` |
-| Text Processing | `cat`, `head`, `tail`, `grep`, `sed`, `awk`, `sort`, `uniq`, `wc`, `diff`, `cut`, `tr`, `tee`, `xargs` |
-| Search & Archive | `find`, `tar` |
-| Process & System | `ps`, `kill`, `df`, `du`, `lsof`, `htop` |
-| Networking | `ping`, `dig`, `wget`, `ss`, `nmap` |
-| System Administration | `systemctl`, `journalctl` |
-| Terminal Multiplexers | `tmux`, `screen` |
-| Testing & Linting | `pytest`, `ruff` |
-| Task Runners | `just` |
-| Database CLIs | `psql`, `mysql`, `redis-cli`, `mongosh`, `sqlite3` |
+| Category               | Commands                                                                                               |
+| :--------------------- | :----------------------------------------------------------------------------------------------------- |
+| VCS & Dev Ecosystem    | `git`, `docker`, `npm`, `cargo`, `brew`, `curl`, `ssh`                                                 |
+| Cloud & Infrastructure | `gh`, `kubectl`, `terraform`, `aws`, `gcloud`, `az`, `helm`                                            |
+| Languages & Runtimes   | `python`, `go`, `node`                                                                                 |
+| Package Managers       | `pip`, `pnpm`, `yarn`, `bun`, `uv`, `poetry`, `cmake`, `make`                                          |
+| AI Tools               | `claude`, `codex`, `opencode`, `antigravity`                                                           |
+| File Operations        | `ls`, `rm`, `cp`, `mv`, `mkdir`, `touch`, `ln`, `chmod`, `chown`                                       |
+| Text Processing        | `cat`, `head`, `tail`, `grep`, `sed`, `awk`, `sort`, `uniq`, `wc`, `diff`, `cut`, `tr`, `tee`, `xargs` |
+| Search & Archive       | `find`, `tar`                                                                                          |
+| Process & System       | `ps`, `kill`, `df`, `du`, `lsof`, `htop`                                                               |
+| Networking             | `ping`, `dig`, `wget`, `ss`, `nmap`                                                                    |
+| System Administration  | `systemctl`, `journalctl`                                                                              |
+| Terminal Multiplexers  | `tmux`, `screen`                                                                                       |
+| Testing & Linting      | `pytest`, `ruff`                                                                                       |
+| Task Runners           | `just`                                                                                                 |
+| Database CLIs          | `psql`, `mysql`, `redis-cli`, `mongosh`, `sqlite3`                                                     |
+
 </details>
 
 ## Safety
@@ -328,6 +330,7 @@ plugin/
 specs/
 └── *.toml               # 77 built-in command specs
 ```
+
 </details>
 
 ## Background
