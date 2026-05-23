@@ -136,12 +136,22 @@ _awen_self_insert() {
 
 _awen_backward_delete_char() {
     if (( _AWEN_MENU_ACTIVE )); then
-        _awen_hl_clear
         _awen_menu_reset
-        POSTDISPLAY=""
     fi
+    _awen_hl_clear
+    POSTDISPLAY=""
+    _AWEN_SUGGESTION=""
+
     zle .backward-delete-char
-    _awen_suggest_local
+
+    if [[ -z "$BUFFER" ]]; then
+        _awen_clear_hint
+        _awen_cancel_pending_ai
+        _awen_cancel_delete_debounce
+        return
+    fi
+
+    _awen_schedule_delete_debounce
 }
 
 _awen_menu_up() {

@@ -280,6 +280,7 @@ _awen_suggest_next() {
 }
 
 _awen_suggest_local() {
+    _awen_cancel_delete_debounce
     if [[ -z "$BUFFER" || ! -S "$_AWEN_SOCKET" ]]; then
         _awen_hl_clear
         POSTDISPLAY=""
@@ -319,6 +320,29 @@ _awen_cancel_pending_ai() {
         _AWEN_AI_PID=""
     fi
     _AWEN_AI_LOADING=0
+}
+
+_awen_schedule_delete_debounce() {
+    _awen_cancel_delete_debounce
+    exec {_AWEN_DELETE_FD}< <(sleep 0.1; echo x)
+    zle -F $_AWEN_DELETE_FD _awen_delete_debounce_callback
+}
+
+_awen_cancel_delete_debounce() {
+    if (( _AWEN_DELETE_FD > 0 )); then
+        zle -F $_AWEN_DELETE_FD 2>/dev/null
+        exec {_AWEN_DELETE_FD}<&- 2>/dev/null
+        _AWEN_DELETE_FD=0
+    fi
+}
+
+_awen_delete_debounce_callback() {
+    local fd=$1
+    zle -F $fd 2>/dev/null
+    exec {fd}<&- 2>/dev/null
+    _AWEN_DELETE_FD=0
+    _awen_suggest_local
+    zle -R
 }
 
 _awen_schedule_ai() {

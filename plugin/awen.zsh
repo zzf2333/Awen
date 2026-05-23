@@ -36,6 +36,7 @@ typeset -g _AWEN_AI_DELAY="${AWEN_AI_DELAY:-1}"
 typeset -g _AWEN_AI_LOADING=0
 typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
 typeset -g _AWEN_LAST_LOCAL_MS=0
+typeset -g _AWEN_DELETE_FD=0
 
 # Path completion (filesystem ghost-only)
 typeset -g _AWEN_PATH_COMPLETION=""
@@ -106,6 +107,7 @@ awen_init() {
 
     trap '
         [[ -n "$_AWEN_AI_PID" ]] && kill "$_AWEN_AI_PID" 2>/dev/null
+        (( _AWEN_DELETE_FD > 0 )) && { zle -F $_AWEN_DELETE_FD 2>/dev/null; exec {_AWEN_DELETE_FD}<&- 2>/dev/null; }
         rm -f "$_AWEN_LAST_STDERR_FILE" "${TMPDIR:-/tmp}/.awen-ai-token-$$" "$_AWEN_AI_RESULT_FILE" 2>/dev/null
     ' EXIT
 
