@@ -30,7 +30,7 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 
 | Feature               | What it does                                                    | Speed   |
 | :-------------------- | :-------------------------------------------------------------- | :------ |
-| **Ghost Text**        | Inline completion from history + command specs                  | <5ms    |
+| **Ghost Text**        | Inline completion from history + command specs + sequence prediction | <5ms    |
 | **File Completion**   | Warp-style directory/file path completion with fuzzy match      | <10ms   |
 | **Failure Recovery**  | Detects 18 error patterns, suggests the fix                     | instant |
 | **Risk Detection**    | Warns on 24 dangerous command patterns before you hit Enter     | instant |
@@ -313,7 +313,7 @@ src/
 │   ├── git.rs           # Git branch/status
 │   └── repo.rs          # Project type detection
 └── layer/
-    ├── history.rs       # SQLite + nucleo fuzzy match
+    ├── history.rs       # SQLite + nucleo fuzzy match + bigram sequence prediction
     ├── specs.rs         # TOML command specs
     ├── ai.rs            # DeepSeek / Ollama providers
     ├── failure.rs       # Stderr → fix suggestion

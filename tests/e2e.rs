@@ -1977,3 +1977,71 @@ async fn test_filesystem_disabled_config() {
 
     daemon.shutdown().await;
 }
+
+#[tokio::test]
+async fn test_sequence_prediction_boost() {
+    let daemon = TestDaemon::start().await;
+
+    for _ in 0..5 {
+        daemon
+            .send(&Request::Record(RecordCommandRequest {
+                command: "git add .".into(),
+                exit_code: 0,
+                stderr: None,
+                cwd: "/project".into(),
+                duration_ms: None,
+            }))
+            .await;
+        daemon
+            .send(&Request::Record(RecordCommandRequest {
+                command: "git commit -m 'test'".into(),
+                exit_code: 0,
+                stderr: None,
+                cwd: "/project".into(),
+                duration_ms: None,
+            }))
+            .await;
+    }
+
+    daemon
+        .send(&Request::Record(RecordCommandRequest {
+            command: "git push".into(),
+            exit_code: 0,
+            stderr: None,
+            cwd: "/project".into(),
+            duration_ms: None,
+        }))
+        .await;
+
+    let req = Request::Suggest(SuggestRequest {
+        input: "".into(),
+        cursor_pos: 0,
+        context: RequestContext {
+            cwd: "/project".into(),
+            last_command: Some("git add .".into()),
+            last_exit_code: Some(0),
+            last_stderr: None,
+            git_branch: None,
+            git_status: None,
+            session_commands: vec![],
+            env_hints: vec![],
+        },
+        timestamp: None,
+        skip_ai: true,
+    });
+
+    let resp = daemon.send(&req).await;
+    match resp {
+        Response::Suggest(s) => {
+            assert!(!s.suggestions.is_empty(), "should have suggestions");
+            assert!(
+                s.suggestions[0].text.contains("git commit"),
+                "sequenced 'git commit' should rank first after 'git add', got: {:?}",
+                s.suggestions.iter().map(|sg| &sg.text).collect::<Vec<_>>()
+            );
+        }
+        other => panic!("expected Suggest response, got: {other:?}"),
+    }
+
+    daemon.shutdown().await;
+}

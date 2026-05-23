@@ -125,8 +125,9 @@ pub async fn run_on_paths_with_ai(
             match crate::layer::history_import::import_zsh_history(&import_db_path, &histfile) {
                 Ok(r) => {
                     tracing::info!(
-                        "history import: {} imported, {} sensitive skipped, {} empty skipped",
+                        "history import: {} imported, {} sequences, {} sensitive skipped, {} empty skipped",
                         r.imported,
+                        r.sequences_imported,
                         r.skipped_sensitive,
                         r.skipped_empty,
                     );
@@ -367,6 +368,12 @@ async fn handle_nl_generate(req: NlGenerateRequest, state: &Arc<Mutex<DaemonStat
 async fn handle_record(req: RecordCommandRequest, state: &Arc<Mutex<DaemonState>>) -> Response {
     let mut state = state.lock().await;
 
+    let prev_command = state
+        .context
+        .session()
+        .last_command()
+        .map(|c| c.command.clone());
+
     state.context.record_command(
         req.command.clone(),
         req.exit_code,
@@ -377,6 +384,12 @@ async fn handle_record(req: RecordCommandRequest, state: &Arc<Mutex<DaemonState>
 
     if let Err(e) = state.history.record(&req.command, &req.cwd, req.exit_code) {
         tracing::warn!("failed to record command: {e}");
+    }
+
+    if let Some(prev) = prev_command
+        && let Err(e) = state.history.record_sequence(&prev, &req.command)
+    {
+        tracing::warn!("failed to record sequence: {e}");
     }
 
     Response::Ok

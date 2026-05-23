@@ -1,4 +1,4 @@
-use crate::layer::history::is_sensitive_command;
+use crate::layer::history::{is_sensitive_command, normalize_command};
 use rusqlite::{Connection, params};
 use std::path::Path;
 
@@ -7,6 +7,7 @@ pub struct ImportResult {
     pub imported: usize,
     pub skipped_sensitive: usize,
     pub skipped_empty: usize,
+    pub sequences_imported: usize,
 }
 
 struct ParsedEntry {
@@ -92,6 +93,7 @@ pub fn import_zsh_history(
         imported: 0,
         skipped_sensitive: 0,
         skipped_empty: 0,
+        sequences_imported: 0,
     };
 
     let conn = Connection::open(db_path)?;
@@ -107,7 +109,14 @@ pub fn import_zsh_history(
         );
         CREATE INDEX IF NOT EXISTS idx_commands_command ON commands(command);
         CREATE INDEX IF NOT EXISTS idx_commands_cwd ON commands(cwd);
-        CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);",
+        CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);
+        CREATE TABLE IF NOT EXISTS command_sequences (
+            prev_command TEXT NOT NULL,
+            next_command TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(prev_command, next_command)
+        );
+        CREATE INDEX IF NOT EXISTS idx_seq_prev ON command_sequences(prev_command);",
     )?;
 
     let tx = conn.unchecked_transaction()?;
@@ -120,21 +129,45 @@ pub fn import_zsh_history(
                 timestamp = MAX(timestamp, ?3)",
         )?;
 
+        let mut seq_stmt = tx.prepare(
+            "INSERT INTO command_sequences (prev_command, next_command, count)
+             VALUES (?1, ?2, 1)
+             ON CONFLICT(prev_command, next_command) DO UPDATE SET
+                count = count + 1",
+        )?;
+
         let fallback_ts = chrono::Utc::now().timestamp();
+        let mut prev_normalized: Option<String> = None;
 
         for entry in &entries {
             let command = entry.command.trim();
             if command.is_empty() {
                 result.skipped_empty += 1;
+                prev_normalized = None;
                 continue;
             }
             if is_sensitive_command(command) {
                 result.skipped_sensitive += 1;
+                prev_normalized = None;
                 continue;
             }
             let ts = entry.timestamp.unwrap_or(fallback_ts);
             stmt.execute(params![command, "", ts])?;
             result.imported += 1;
+
+            let curr_normalized = normalize_command(command);
+            if let Some(ref prev) = prev_normalized
+                && !curr_normalized.is_empty()
+                && prev != &curr_normalized
+            {
+                seq_stmt.execute(params![prev, curr_normalized])?;
+                result.sequences_imported += 1;
+            }
+            prev_normalized = if curr_normalized.is_empty() {
+                None
+            } else {
+                Some(curr_normalized)
+            };
         }
     }
     tx.commit()?;
@@ -289,5 +322,51 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ts, 1716100000);
+    }
+
+    #[test]
+    fn test_import_builds_sequences() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("history.db");
+        let hist_path = dir.path().join(".zsh_history");
+        std::fs::write(
+            &hist_path,
+            ": 1716100000:0;git add .\n: 1716100001:0;git commit -m 'test'\n: 1716100002:0;git push\n",
+        )
+        .unwrap();
+
+        let result = import_zsh_history(&db_path, &hist_path).unwrap();
+        assert_eq!(result.sequences_imported, 2);
+
+        let conn = Connection::open(&db_path).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT count FROM command_sequences WHERE prev_command = 'git add' AND next_command = 'git commit'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_import_sequences_skip_sensitive() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("history.db");
+        let hist_path = dir.path().join(".zsh_history");
+        std::fs::write(
+            &hist_path,
+            "git add .\nexport API_KEY=sk-abc123\ngit push\n",
+        )
+        .unwrap();
+
+        let result = import_zsh_history(&db_path, &hist_path).unwrap();
+        assert_eq!(result.sequences_imported, 0, "sensitive commands should break sequence chain");
+
+        let conn = Connection::open(&db_path).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM command_sequences", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 }

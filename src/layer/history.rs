@@ -3,6 +3,7 @@ use crate::sanitize::{SENSITIVE_COMMAND_RE, SENSITIVE_VALUE_RE};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 use rusqlite::{Connection, params};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 const MAX_COMMAND_LENGTH: usize = 500;
@@ -17,9 +18,26 @@ const FAILURE_PENALTY: f64 = 0.3;
 const LAST_CMD_PENALTY: f64 = 0.1;
 const NEXT_CONFIDENCE_SCALE: f64 = 0.5;
 const NEXT_CONFIDENCE_CAP: f64 = 0.5;
+const SEQUENCE_BOOST_NEXT: f64 = 5.0;
+const SEQUENCE_BOOST_SUGGEST: f64 = 2.0;
+const SEQUENCE_QUERY_LIMIT: usize = 50;
 
 pub fn is_sensitive_command(command: &str) -> bool {
     SENSITIVE_VALUE_RE.is_match(command) || SENSITIVE_COMMAND_RE.is_match(command)
+}
+
+pub fn normalize_command(command: &str) -> String {
+    let mut words = command.split_whitespace();
+    let first = match words.next() {
+        Some(w) => w,
+        None => return String::new(),
+    };
+    for word in words {
+        if !word.starts_with('-') {
+            return format!("{first} {word}");
+        }
+    }
+    first.to_string()
 }
 
 pub struct HistoryLayer {
@@ -41,7 +59,14 @@ impl HistoryLayer {
             );
             CREATE INDEX IF NOT EXISTS idx_commands_command ON commands(command);
             CREATE INDEX IF NOT EXISTS idx_commands_cwd ON commands(cwd);
-            CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);",
+            CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);
+            CREATE TABLE IF NOT EXISTS command_sequences (
+                prev_command TEXT NOT NULL,
+                next_command TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(prev_command, next_command)
+            );
+            CREATE INDEX IF NOT EXISTS idx_seq_prev ON command_sequences(prev_command);",
         )?;
         Ok(Self {
             db_path: db_path.to_path_buf(),
@@ -69,6 +94,65 @@ impl HistoryLayer {
             params![command, cwd, now, exit_code],
         )?;
         Ok(())
+    }
+
+    pub fn record_sequence(
+        &self,
+        prev_command: &str,
+        next_command: &str,
+    ) -> Result<(), rusqlite::Error> {
+        let prev_norm = normalize_command(prev_command);
+        let next_norm = normalize_command(next_command);
+        if prev_norm.is_empty() || next_norm.is_empty() || prev_norm == next_norm {
+            return Ok(());
+        }
+        if is_sensitive_command(prev_command) || is_sensitive_command(next_command) {
+            return Ok(());
+        }
+        let conn = Connection::open(&self.db_path)?;
+        conn.execute(
+            "INSERT INTO command_sequences (prev_command, next_command, count)
+             VALUES (?1, ?2, 1)
+             ON CONFLICT(prev_command, next_command) DO UPDATE SET
+                count = count + 1",
+            params![prev_norm, next_norm],
+        )?;
+        Ok(())
+    }
+
+    fn query_sequence_boosts(
+        &self,
+        prev_command: &str,
+        weight: f64,
+    ) -> HashMap<String, f64> {
+        let prev_norm = normalize_command(prev_command);
+        if prev_norm.is_empty() {
+            return HashMap::new();
+        }
+        let conn = match Connection::open(&self.db_path) {
+            Ok(c) => c,
+            Err(_) => return HashMap::new(),
+        };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT next_command, count FROM command_sequences
+             WHERE prev_command = ?1 ORDER BY count DESC LIMIT ?2",
+        ) else {
+            return HashMap::new();
+        };
+        let rows: Vec<(String, i64)> = match stmt
+            .query_map(params![prev_norm, SEQUENCE_QUERY_LIMIT as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }) {
+            Ok(mapped) => mapped.filter_map(|r| r.ok()).collect(),
+            Err(_) => return HashMap::new(),
+        };
+        let max_count = rows.first().map(|(_, c)| *c).unwrap_or(1).max(1) as f64;
+        rows.into_iter()
+            .map(|(cmd, count)| {
+                let boost = 1.0 + weight * (count as f64 / max_count);
+                (cmd, boost)
+            })
+            .collect()
     }
 
     pub fn suggest(
@@ -107,6 +191,10 @@ impl HistoryLayer {
             .filter_map(|r| r.ok())
             .collect();
 
+        let seq_boosts = last_command
+            .map(|lc| self.query_sequence_boosts(lc, SEQUENCE_BOOST_SUGGEST))
+            .unwrap_or_default();
+
         let mut matcher = Matcher::new(Config::DEFAULT);
         let pattern = Pattern::parse(input, CaseMatching::Smart, Normalization::Smart);
 
@@ -133,14 +221,15 @@ impl HistoryLayer {
                 if cmd_first != input_first_word {
                     continue;
                 }
-                if let Some(last_word) = input_lower.split_whitespace().last() {
-                    if last_word.starts_with('-') && last_word.len() >= 3 {
-                        let has_flag = cmd_lower
-                            .split_whitespace()
-                            .any(|w| w.starts_with(last_word));
-                        if !has_flag {
-                            continue;
-                        }
+                if let Some(last_word) = input_lower.split_whitespace().last()
+                    && last_word.starts_with('-')
+                    && last_word.len() >= 3
+                {
+                    let has_flag = cmd_lower
+                        .split_whitespace()
+                        .any(|w| w.starts_with(last_word));
+                    if !has_flag {
+                        continue;
                     }
                 }
             }
@@ -173,6 +262,10 @@ impl HistoryLayer {
                 } else {
                     1.0
                 };
+                let seq_boost = seq_boosts
+                    .get(&normalize_command(command))
+                    .copied()
+                    .unwrap_or(1.0);
 
                 let score = match_score as f64
                     * recency_decay
@@ -180,7 +273,8 @@ impl HistoryLayer {
                     * dir_affinity
                     * prefix_bonus
                     * failure_penalty
-                    * last_cmd_penalty;
+                    * last_cmd_penalty
+                    * seq_boost;
                 scored.push((score, command.clone()));
             }
         }
@@ -233,6 +327,10 @@ impl HistoryLayer {
             .filter_map(|r| r.ok())
             .collect();
 
+        let seq_boosts = last_command
+            .map(|lc| self.query_sequence_boosts(lc, SEQUENCE_BOOST_NEXT))
+            .unwrap_or_default();
+
         let now = chrono::Utc::now().timestamp();
         let mut scored: Vec<(f64, String)> = Vec::new();
 
@@ -255,8 +353,13 @@ impl HistoryLayer {
             } else {
                 1.0
             };
+            let seq_boost = seq_boosts
+                .get(&normalize_command(command))
+                .copied()
+                .unwrap_or(1.0);
 
-            let score = recency * frequency * dir_affinity * failure_penalty * last_cmd_penalty;
+            let score =
+                recency * frequency * dir_affinity * failure_penalty * last_cmd_penalty * seq_boost;
             scored.push((score, command.clone()));
         }
 
@@ -472,6 +575,109 @@ mod tests {
                 "expected git prefix, got: {}",
                 s.text
             );
+        }
+    }
+
+    #[test]
+    fn test_normalize_command() {
+        assert_eq!(normalize_command("git add ."), "git add");
+        assert_eq!(normalize_command("git commit -m 'fix'"), "git commit");
+        assert_eq!(normalize_command("cargo test --lib"), "cargo test");
+        assert_eq!(normalize_command("ls -la"), "ls");
+        assert_eq!(normalize_command("docker run -p 3000:3000 app"), "docker run");
+        assert_eq!(normalize_command("npm install express"), "npm install");
+        assert_eq!(normalize_command("pwd"), "pwd");
+        assert_eq!(normalize_command(""), "");
+        assert_eq!(normalize_command("  "), "");
+    }
+
+    #[test]
+    fn test_record_sequence_basic() {
+        let (_dir, layer) = setup();
+        layer.record_sequence("git add .", "git commit -m 'test'").unwrap();
+
+        let boosts = layer.query_sequence_boosts("git add .", SEQUENCE_BOOST_NEXT);
+        assert!(boosts.contains_key("git commit"));
+    }
+
+    #[test]
+    fn test_record_sequence_count_increment() {
+        let (_dir, layer) = setup();
+        for _ in 0..5 {
+            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+        }
+        layer.record_sequence("git add .", "git status").unwrap();
+
+        let boosts = layer.query_sequence_boosts("git add", SEQUENCE_BOOST_NEXT);
+        let commit_boost = boosts.get("git commit").copied().unwrap_or(1.0);
+        let status_boost = boosts.get("git status").copied().unwrap_or(1.0);
+        assert!(commit_boost > status_boost, "higher count should get higher boost");
+    }
+
+    #[test]
+    fn test_record_sequence_sensitive_skipped() {
+        let (_dir, layer) = setup();
+        layer
+            .record_sequence("export API_KEY=sk-abc123", "curl http://example.com")
+            .unwrap();
+
+        let boosts = layer.query_sequence_boosts("export API_KEY=sk-abc123", SEQUENCE_BOOST_NEXT);
+        assert!(boosts.is_empty());
+    }
+
+    #[test]
+    fn test_record_sequence_same_command_skipped() {
+        let (_dir, layer) = setup();
+        layer.record_sequence("ls -la", "ls -l").unwrap();
+
+        let boosts = layer.query_sequence_boosts("ls", SEQUENCE_BOOST_NEXT);
+        assert!(boosts.is_empty(), "same normalized command should be skipped");
+    }
+
+    #[test]
+    fn test_suggest_next_with_sequence_boost() {
+        let (_dir, layer) = setup();
+        layer.record("git commit -m 'test'", "/app", 0).unwrap();
+        layer.record("git status", "/app", 0).unwrap();
+        layer.record("git push", "/app", 0).unwrap();
+
+        for _ in 0..5 {
+            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+        }
+
+        let results = layer.suggest_next("/app", Some("git add ."), 5);
+        assert!(!results.is_empty());
+        assert_eq!(
+            results[0].text, "git commit -m 'test'",
+            "sequenced command should rank first"
+        );
+    }
+
+    #[test]
+    fn test_suggest_next_no_sequence_data() {
+        let (_dir, layer) = setup();
+        layer.record("cargo build", "/app", 0).unwrap();
+        layer.record("cargo test", "/app", 0).unwrap();
+
+        let results = layer.suggest_next("/app", Some("cargo fmt"), 5);
+        assert!(!results.is_empty(), "should still return results without sequence data");
+    }
+
+    #[test]
+    fn test_suggest_with_sequence_boost() {
+        let (_dir, layer) = setup();
+        layer.record("git commit -m 'test'", "/app", 0).unwrap();
+        layer.record("git checkout main", "/app", 0).unwrap();
+
+        for _ in 0..5 {
+            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+        }
+
+        let results = layer.suggest("git", "/app", Some("git add ."), 10);
+        let commit_pos = results.iter().position(|s| s.text.contains("commit"));
+        let checkout_pos = results.iter().position(|s| s.text.contains("checkout"));
+        if let (Some(c), Some(co)) = (commit_pos, checkout_pos) {
+            assert!(c < co, "sequenced git commit should rank above git checkout");
         }
     }
 }
