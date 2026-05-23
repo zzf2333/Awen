@@ -153,7 +153,9 @@ impl SuggestionPipeline {
                 false
             };
 
-            let has_failure_context = req_context.last_exit_code.is_some_and(|c| c != 0)
+            let has_failure_context = req_context
+                .last_exit_code
+                .is_some_and(|c| c != 0 && !FailureLayer::is_user_signal(c))
                 && req_context.last_stderr.is_some();
 
             LocalResult {
@@ -208,7 +210,9 @@ impl SuggestionPipeline {
                 false
             };
 
-            let has_failure_context = req_context.last_exit_code.is_some_and(|c| c != 0)
+            let has_failure_context = req_context
+                .last_exit_code
+                .is_some_and(|c| c != 0 && !FailureLayer::is_user_signal(c))
                 && req_context.last_stderr.is_some();
 
             let warning = if layers.risk_enabled {

@@ -181,6 +181,7 @@ awen_init() {
     _awen_line_init() {
         if (( ! _AWEN_FAILURE_SHOWN )) \
             && [[ -n "$_AWEN_LAST_EXIT_CODE" && "$_AWEN_LAST_EXIT_CODE" -ne 0 ]] \
+            && [[ "$_AWEN_LAST_EXIT_CODE" -ne 130 && "$_AWEN_LAST_EXIT_CODE" -ne 137 && "$_AWEN_LAST_EXIT_CODE" -ne 143 ]] \
             && [[ -s "$_AWEN_LAST_STDERR_FILE" ]] \
             && [[ -z "$BUFFER" ]]; then
             _AWEN_FAILURE_SHOWN=1

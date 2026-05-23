@@ -65,8 +65,12 @@ impl FailureLayer {
         }
     }
 
+    pub fn is_user_signal(exit_code: i32) -> bool {
+        matches!(exit_code, 130 | 137 | 143)
+    }
+
     pub fn match_failure(&self, stderr: &str, exit_code: i32) -> Option<(Suggestion, Hint)> {
-        if exit_code == 0 || stderr.is_empty() {
+        if exit_code == 0 || Self::is_user_signal(exit_code) || stderr.is_empty() {
             return None;
         }
 
@@ -283,6 +287,15 @@ mod tests {
         let layer = FailureLayer::new();
         let result = layer.match_failure("cannot find crate `tokio`", 0);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_user_signal_exit_codes_ignored() {
+        let layer = FailureLayer::new();
+        for code in [130, 137, 143] {
+            let result = layer.match_failure("some error output", code);
+            assert!(result.is_none(), "exit code {code} should be ignored");
+        }
     }
 
     #[test]
