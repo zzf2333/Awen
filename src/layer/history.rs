@@ -128,10 +128,20 @@ impl HistoryLayer {
                 continue;
             }
             if has_space {
-                let cmd_first_word = command.to_lowercase();
-                let cmd_first = cmd_first_word.split_whitespace().next().unwrap_or("");
+                let cmd_lower = command.to_lowercase();
+                let cmd_first = cmd_lower.split_whitespace().next().unwrap_or("");
                 if cmd_first != input_first_word {
                     continue;
+                }
+                if let Some(last_word) = input_lower.split_whitespace().last() {
+                    if last_word.starts_with('-') && last_word.len() >= 3 {
+                        let has_flag = cmd_lower
+                            .split_whitespace()
+                            .any(|w| w.starts_with(last_word));
+                        if !has_flag {
+                            continue;
+                        }
+                    }
                 }
             }
             let mut buf = Vec::new();
@@ -409,6 +419,40 @@ mod tests {
         let (_dir, layer) = setup();
         let results = layer.suggest_next("/tmp", None, 5);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_suggest_flag_prefix_filter() {
+        let (_dir, layer) = setup();
+        layer
+            .record("claude --dangerously-skip-permissions", "/app", 0)
+            .unwrap();
+        layer
+            .record("claude --print config", "/app", 0)
+            .unwrap();
+
+        let results = layer.suggest("claude --prin", "/app", None, 10);
+        for s in &results {
+            assert!(
+                s.text.contains("--print"),
+                "flag mismatch should be filtered: {}",
+                s.text
+            );
+        }
+    }
+
+    #[test]
+    fn test_suggest_short_flag_not_filtered() {
+        let (_dir, layer) = setup();
+        layer
+            .record("claude --dangerously-skip-permissions", "/app", 0)
+            .unwrap();
+
+        let results = layer.suggest("claude --", "/app", None, 10);
+        assert!(
+            !results.is_empty(),
+            "short flag prefix (--) should not filter"
+        );
     }
 
     #[test]
