@@ -34,7 +34,7 @@ The name comes from the Welsh word for "poetic inspiration" — a breeze that ar
 | **File Completion**   | Warp-style directory/file path completion with fuzzy match      | <10ms   |
 | **Failure Recovery**  | Detects 18 error patterns, suggests the fix                     | instant |
 | **Risk Detection**    | Warns on 24 dangerous command patterns before you hit Enter     | instant |
-| **Command Specs**     | 77 built-in specs — subcommands, flags, descriptions            | <20ms   |
+| **Command Specs**     | 143 built-in specs — subcommands, flags, descriptions           | <20ms   |
 | **AI Completion**     | DeepSeek / Ollama as async fallback when local isn't enough     | async   |
 | **Natural Language**  | Type `# find large files` → get the shell command               | async   |
 | **Context Awareness** | Tracks git state, project type, session history, last exit code | always  |
@@ -253,25 +253,29 @@ description = "Target environment"
 Add your own patterns in `~/.config/awen/failure_patterns.toml` and `~/.config/awen/risk_patterns.toml`.
 
 <details>
-<summary>Built-in command specs (77)</summary>
+<summary>Built-in command specs (143)</summary>
 
-| Category               | Commands                                                                                               |
-| :--------------------- | :----------------------------------------------------------------------------------------------------- |
-| VCS & Dev Ecosystem    | `git`, `docker`, `npm`, `cargo`, `brew`, `curl`, `ssh`                                                 |
-| Cloud & Infrastructure | `gh`, `kubectl`, `terraform`, `aws`, `gcloud`, `az`, `helm`                                            |
-| Languages & Runtimes   | `python`, `go`, `node`                                                                                 |
-| Package Managers       | `pip`, `pnpm`, `yarn`, `bun`, `uv`, `poetry`, `cmake`, `make`                                          |
-| AI Tools               | `claude`, `codex`, `opencode`, `antigravity`                                                           |
-| File Operations        | `ls`, `rm`, `cp`, `mv`, `mkdir`, `touch`, `ln`, `chmod`, `chown`                                       |
-| Text Processing        | `cat`, `head`, `tail`, `grep`, `sed`, `awk`, `sort`, `uniq`, `wc`, `diff`, `cut`, `tr`, `tee`, `xargs` |
-| Search & Archive       | `find`, `tar`                                                                                          |
-| Process & System       | `ps`, `kill`, `df`, `du`, `lsof`, `htop`                                                               |
-| Networking             | `ping`, `dig`, `wget`, `ss`, `nmap`                                                                    |
-| System Administration  | `systemctl`, `journalctl`                                                                              |
-| Terminal Multiplexers  | `tmux`, `screen`                                                                                       |
-| Testing & Linting      | `pytest`, `ruff`                                                                                       |
-| Task Runners           | `just`                                                                                                 |
-| Database CLIs          | `psql`, `mysql`, `redis-cli`, `mongosh`, `sqlite3`                                                     |
+| Category               | Commands                                                                                                               |
+| :--------------------- | :--------------------------------------------------------------------------------------------------------------------- |
+| VCS & Dev Ecosystem    | `git`, `git-lfs`, `docker`, `npm`, `npx`, `cargo`, `brew`, `curl`, `ssh`                                               |
+| Cloud & Infrastructure | `gh`, `kubectl`, `terraform`, `aws`, `gcloud`, `az`, `helm`                                                            |
+| Languages & Runtimes   | `python`, `go`, `node`, `deno`, `java`, `ruby`, `php`, `rustc`                                                         |
+| Package Managers       | `pip`, `pipenv`, `pnpm`, `yarn`, `bun`, `uv`, `poetry`, `conda`, `gem`, `bundle`, `composer`, `dotnet`, `rustup`, `cmake`, `make` |
+| AI Tools               | `claude`, `codex`, `opencode`, `antigravity`                                                                           |
+| File Operations        | `ls`, `rm`, `cp`, `mv`, `mkdir`, `touch`, `ln`, `chmod`, `chown`, `zip`, `unzip`, `gzip`                               |
+| Text Processing        | `cat`, `head`, `tail`, `grep`, `sed`, `awk`, `sort`, `uniq`, `wc`, `diff`, `cut`, `tr`, `tee`, `xargs`, `less`, `echo`, `jq`, `yq` |
+| Search & Archive       | `find`, `tar`                                                                                                          |
+| Process & System       | `ps`, `kill`, `df`, `du`, `lsof`, `top`, `free`, `crontab`, `env`, `which`, `file`, `date`, `uname`, `hostname`, `uptime`, `htop` |
+| Networking             | `ping`, `dig`, `wget`, `ss`, `nmap`, `scp`, `rsync`, `ssh-keygen`, `nc`, `traceroute`, `ip`                            |
+| Security & Encryption  | `openssl`, `gpg`                                                                                                       |
+| System Administration  | `systemctl`, `journalctl`                                                                                              |
+| Terminal Multiplexers  | `tmux`, `screen`                                                                                                       |
+| Testing & Linting      | `pytest`, `ruff`, `eslint`, `prettier`, `vitest`, `flake8`, `mypy`, `isort`, `black`                                    |
+| Task Runners & CI      | `just`, `pre-commit`, `act`                                                                                            |
+| Build Tools & Bundlers | `tsc`, `vite`, `webpack`, `next`                                                                                       |
+| Modern CLI Tools       | `rg`, `fd`, `bat`, `eza`, `fzf`, `delta`, `hyperfine`, `lazygit`, `sd`, `procs`, `dust`, `duf`, `zoxide`                |
+| HTTP Clients           | `http` (HTTPie)                                                                                                        |
+| Database CLIs          | `psql`, `mysql`, `redis-cli`, `mongosh`, `sqlite3`                                                                     |
 
 </details>
 
@@ -328,7 +332,7 @@ plugin/
 ├── awen-interact.zsh    # ZLE widget handlers (accept, dismiss, navigate)
 └── awen-communicate.zsh # Request/response, async AI, hooks
 specs/
-└── *.toml               # 77 built-in command specs
+└── *.toml               # 143 built-in command specs
 ```
 
 </details>
