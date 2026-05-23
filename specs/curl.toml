@@ -104,3 +104,25 @@ description = "Request compressed response"
 name = "--json"
 arg = "DATA"
 description = "Send JSON data"
+
+[[command.flags]]
+name = "--head"
+short = "-I"
+description = "Show response headers only"
+
+[[command.flags]]
+name = "--remote-name"
+short = "-O"
+description = "Save as remote filename"
+
+[[command.flags]]
+name = "--proxy"
+short = "-x"
+arg = "URL"
+description = "Use proxy"
+
+[[command.flags]]
+name = "--cookie-jar"
+short = "-c"
+arg = "FILE"
+description = "Write cookies to file"

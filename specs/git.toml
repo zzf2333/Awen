@@ -258,3 +258,175 @@ name = "--create"
 short = "-c"
 arg = "BRANCH"
 description = "Create and switch"
+
+[[command.subcommands]]
+name = "cherry-pick"
+description = "Apply commits from other branches"
+[[command.subcommands.flags]]
+name = "--no-commit"
+short = "-n"
+description = "Apply without committing"
+[[command.subcommands.flags]]
+name = "--abort"
+description = "Cancel cherry-pick"
+[[command.subcommands.flags]]
+name = "--continue"
+description = "Continue after resolving conflicts"
+
+[[command.subcommands]]
+name = "bisect"
+description = "Binary search for bad commit"
+[[command.subcommands.subcommands]]
+name = "start"
+description = "Start bisect session"
+[[command.subcommands.subcommands]]
+name = "bad"
+description = "Mark current commit as bad"
+[[command.subcommands.subcommands]]
+name = "good"
+description = "Mark current commit as good"
+[[command.subcommands.subcommands]]
+name = "reset"
+description = "End bisect session"
+[[command.subcommands.subcommands]]
+name = "log"
+description = "Show bisect log"
+
+[[command.subcommands]]
+name = "blame"
+description = "Show line-by-line authorship"
+[[command.subcommands.flags]]
+name = "-L"
+arg = "START,END"
+description = "Annotate line range"
+[[command.subcommands.flags]]
+name = "-e"
+description = "Show author email"
+[[command.subcommands.flags]]
+name = "-w"
+description = "Ignore whitespace changes"
+
+[[command.subcommands]]
+name = "clean"
+description = "Remove untracked files"
+[[command.subcommands.flags]]
+name = "-d"
+description = "Remove directories too"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force removal"
+[[command.subcommands.flags]]
+name = "--dry-run"
+short = "-n"
+description = "Dry run"
+
+[[command.subcommands]]
+name = "revert"
+description = "Revert a commit"
+[[command.subcommands.flags]]
+name = "--no-commit"
+short = "-n"
+description = "Revert without committing"
+[[command.subcommands.flags]]
+name = "--abort"
+description = "Cancel revert"
+
+[[command.subcommands]]
+name = "worktree"
+description = "Manage linked working trees"
+[[command.subcommands.subcommands]]
+name = "add"
+description = "Create a new working tree"
+[[command.subcommands.subcommands]]
+name = "list"
+description = "List working trees"
+[[command.subcommands.subcommands]]
+name = "remove"
+description = "Remove a working tree"
+[[command.subcommands.subcommands]]
+name = "prune"
+description = "Prune stale working trees"
+
+[[command.subcommands]]
+name = "submodule"
+description = "Manage submodules"
+[[command.subcommands.subcommands]]
+name = "add"
+description = "Add a submodule"
+[[command.subcommands.subcommands]]
+name = "init"
+description = "Initialize submodules"
+[[command.subcommands.subcommands]]
+name = "update"
+description = "Update submodules"
+[[command.subcommands.subcommands.flags]]
+name = "--init"
+description = "Initialize before update"
+[[command.subcommands.subcommands.flags]]
+name = "--recursive"
+description = "Update nested submodules"
+[[command.subcommands.subcommands]]
+name = "status"
+description = "Show submodule status"
+[[command.subcommands.subcommands]]
+name = "deinit"
+description = "Unregister submodule"
+
+[[command.subcommands]]
+name = "reflog"
+description = "Manage reflog entries"
+[[command.subcommands.flags]]
+name = "--all"
+description = "Show all refs"
+[[command.subcommands.flags]]
+name = "-n"
+arg = "N"
+description = "Limit entries"
+
+[[command.subcommands]]
+name = "show"
+description = "Show commit or object"
+[[command.subcommands.flags]]
+name = "--stat"
+description = "Show diffstat"
+[[command.subcommands.flags]]
+name = "--format"
+arg = "FORMAT"
+description = "Pretty-print format"
+
+[[command.subcommands]]
+name = "config"
+description = "Get and set options"
+[[command.subcommands.flags]]
+name = "--global"
+description = "Use global config"
+[[command.subcommands.flags]]
+name = "--local"
+description = "Use repository config"
+[[command.subcommands.flags]]
+name = "--list"
+short = "-l"
+description = "List all settings"
+
+[[command.subcommands]]
+name = "describe"
+description = "Name a commit using tags"
+[[command.subcommands.flags]]
+name = "--tags"
+description = "Use any tag, not just annotated"
+[[command.subcommands.flags]]
+name = "--always"
+description = "Show abbreviated commit if no tag"
+
+[[command.subcommands]]
+name = "archive"
+description = "Create archive of files"
+[[command.subcommands.flags]]
+name = "--format"
+arg = "FORMAT"
+description = "Archive format (tar, zip)"
+[[command.subcommands.flags]]
+name = "--prefix"
+arg = "PREFIX"
+description = "Prepend prefix to paths"

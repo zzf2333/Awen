@@ -1,0 +1,15 @@
+[command]
+name = "echo"
+description = "Display text"
+
+[[command.flags]]
+name = "-n"
+description = "No trailing newline"
+
+[[command.flags]]
+name = "-e"
+description = "Interpret escape sequences"
+
+[[command.flags]]
+name = "-E"
+description = "Disable escape interpretation"

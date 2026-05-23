@@ -147,3 +147,37 @@ description = "Show what depends on package"
 [[command.subcommands]]
 name = "search"
 description = "Search crates.io"
+
+[[command.subcommands]]
+name = "install"
+description = "Install a Rust binary"
+[[command.subcommands.flags]]
+name = "--path"
+arg = "PATH"
+description = "Install from local path"
+[[command.subcommands.flags]]
+name = "--git"
+arg = "URL"
+description = "Install from git repo"
+[[command.subcommands.flags]]
+name = "--force"
+short = "-f"
+description = "Force overwrite"
+
+[[command.subcommands]]
+name = "uninstall"
+description = "Remove an installed binary"
+
+[[command.subcommands]]
+name = "fix"
+description = "Apply compiler suggestions"
+[[command.subcommands.flags]]
+name = "--edition"
+description = "Fix edition-related lints"
+[[command.subcommands.flags]]
+name = "--allow-dirty"
+description = "Allow dirty working directory"
+
+[[command.subcommands]]
+name = "vendor"
+description = "Vendor all dependencies locally"
