@@ -12,7 +12,7 @@ description = "IPv6 only"
 
 [[command.flags]]
 name = "--brief"
-short = "-br"
+short = "-b"
 description = "Brief output"
 
 [[command.flags]]
