@@ -110,7 +110,7 @@ _awen_repeat() {
 _awen_keycap_line() {
     local width="$1"
     local logo="${_AWEN_LOGO:-Awen}"
-    local actions="↑↓ select   ↵ run   → next word"
+    local actions="↑↓ select   ↩ run   → next word"
     local gap=$(( width - ${#actions} - ${#logo} ))
     if (( gap < 2 )); then
         printf '%s' "$actions"

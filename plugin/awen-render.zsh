@@ -269,7 +269,7 @@ _awen_render_risk_panel() {
     local top_line="  ╭${rule}╮"
     local title_content="$(_awen_pad_right "$(_awen_source_icon risk) risk warning (risk)" "$content_width")"
     local text_content="$(_awen_pad_right "$warning_text" "$content_width")"
-    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↵ confirm   ⇥ ignore   suggests only")" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↩ confirm   ⇥ ignore   suggests only")" "$content_width")"
     local bottom_line="  ╰${rule}╯"
     local line
 
@@ -407,7 +407,7 @@ _awen_render_failure_panel() {
     local title_content="$(_awen_pad_right "$(_awen_source_icon failure) command failed" "$content_width")"
     local hint_content="$(_awen_pad_right "$display_hint" "$content_width")"
     local fix_content="$(_awen_pad_right "> ${fix_cmd}" "$content_width")"
-    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↵ apply fix   ⇥ ignore")" "$content_width")"
+    local foot_content="$(_awen_pad_right "$(_awen_footer_line "$content_width" "↩ apply fix   ⇥ ignore")" "$content_width")"
     local bottom_line="  ╰${rule}╯"
     local line
 
