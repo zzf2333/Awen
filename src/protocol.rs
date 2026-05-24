@@ -83,8 +83,6 @@ pub struct NlGenerateResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SuggestResponse {
     pub suggestions: Vec<Suggestion>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub path_completion: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hint: Option<Hint>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -244,7 +242,7 @@ mod tests {
                 confidence: 0.92,
                 description: Some("run recently built image".into()),
             }],
-            path_completion: None,
+
             hint: None,
             warning: Some(Warning {
                 text: "This will delete everything".into(),

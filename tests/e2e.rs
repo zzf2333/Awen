@@ -1817,18 +1817,18 @@ async fn test_filesystem_cd_only_directories() {
 
     match resp {
         Response::Suggest(s) => {
+            let fs_items: Vec<_> = s
+                .suggestions
+                .iter()
+                .filter(|sg| sg.source == SuggestionSource::Filesystem)
+                .collect();
             assert!(
-                s.suggestions
-                    .iter()
-                    .all(|sg| sg.source != SuggestionSource::Filesystem),
-                "filesystem should not appear in menu suggestions"
+                !fs_items.is_empty(),
+                "cd should have filesystem suggestions"
             );
-            let pc = s
-                .path_completion
-                .expect("path_completion should be set for 'cd '");
             assert!(
-                pc.ends_with('/'),
-                "cd path_completion should be a directory, got: {pc}"
+                fs_items.iter().all(|sg| sg.text.ends_with('/')),
+                "cd filesystem suggestions should be directories"
             );
         }
         other => panic!("expected Suggest response, got: {other:?}"),
@@ -1866,18 +1866,18 @@ async fn test_filesystem_cat_only_files() {
 
     match resp {
         Response::Suggest(s) => {
+            let fs_items: Vec<_> = s
+                .suggestions
+                .iter()
+                .filter(|sg| sg.source == SuggestionSource::Filesystem)
+                .collect();
             assert!(
-                s.suggestions
-                    .iter()
-                    .all(|sg| sg.source != SuggestionSource::Filesystem),
-                "filesystem should not appear in menu suggestions"
+                !fs_items.is_empty(),
+                "cat should have filesystem suggestions"
             );
-            let pc = s
-                .path_completion
-                .expect("path_completion should be set for 'cat '");
             assert!(
-                !pc.ends_with('/'),
-                "cat path_completion should be a file, got: {pc}"
+                fs_items.iter().all(|sg| !sg.text.ends_with('/')),
+                "cat filesystem suggestions should be files, not directories"
             );
         }
         other => panic!("expected Suggest response, got: {other:?}"),
@@ -1916,18 +1916,20 @@ async fn test_filesystem_sensitive_paths_hidden() {
 
     match resp {
         Response::Suggest(s) => {
+            let fs_items: Vec<_> = s
+                .suggestions
+                .iter()
+                .filter(|sg| sg.source == SuggestionSource::Filesystem)
+                .collect();
             assert!(
-                s.suggestions
-                    .iter()
-                    .all(|sg| sg.source != SuggestionSource::Filesystem),
-                "filesystem should not appear in menu suggestions"
+                !fs_items.is_empty(),
+                "cd should have filesystem suggestions for src/"
             );
-            let pc = s
-                .path_completion
-                .expect("path_completion should be set for 'cd ' with src/ present");
-            assert!(!pc.contains(".ssh"), "should not suggest .ssh");
-            assert!(!pc.contains(".env"), "should not suggest .env");
-            assert!(!pc.contains(".git"), "should not suggest .git");
+            for item in &fs_items {
+                assert!(!item.text.contains(".ssh"), "should not suggest .ssh");
+                assert!(!item.text.contains(".env"), "should not suggest .env");
+                assert!(!item.text.contains(".git"), "should not suggest .git");
+            }
         }
         other => panic!("expected Suggest response, got: {other:?}"),
     }
@@ -1969,11 +1971,7 @@ async fn test_filesystem_disabled_config() {
                 s.suggestions
                     .iter()
                     .all(|sg| sg.source != SuggestionSource::Filesystem),
-                "filesystem should not appear in menu suggestions"
-            );
-            assert!(
-                s.path_completion.is_none(),
-                "path_completion should be None when filesystem is disabled"
+                "filesystem suggestions should not appear when disabled"
             );
         }
         other => panic!("expected Suggest response, got: {other:?}"),

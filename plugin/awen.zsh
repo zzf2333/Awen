@@ -39,9 +39,6 @@ typeset -g _AWEN_LOCAL_THROTTLE_MS="${AWEN_LOCAL_THROTTLE_MS:-20}"
 typeset -g _AWEN_LAST_LOCAL_MS=0
 typeset -g _AWEN_DELETE_FD=0
 
-# Path completion (filesystem ghost-only)
-typeset -g _AWEN_PATH_COMPLETION=""
-
 # NL mode state
 typeset -g _AWEN_NL_MODE=0
 typeset -g _AWEN_FAILURE_SHOWN=0

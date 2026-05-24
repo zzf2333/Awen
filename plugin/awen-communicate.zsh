@@ -84,7 +84,6 @@ _awen_apply_response() {
         _awen_hl_clear
         POSTDISPLAY=""
         _AWEN_SUGGESTION=""
-        _AWEN_PATH_COMPLETION=""
         return
     fi
 
@@ -127,17 +126,6 @@ _awen_apply_response() {
             _AWEN_NEED_AI="true"
         else
             _AWEN_NEED_AI="false"
-        fi
-    fi
-
-    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
-        _AWEN_PATH_COMPLETION=$(printf '%s\n' "$response" | jq -r '.path_completion // empty' 2>/dev/null)
-    else
-        if [[ "$response" == *'"path_completion":"'* ]]; then
-            local tmp="${response#*\"path_completion\":\"}"
-            _AWEN_PATH_COMPLETION=$(_awen_extract_json_value "$tmp")
-        else
-            _AWEN_PATH_COMPLETION=""
         fi
     fi
 
@@ -206,18 +194,8 @@ _awen_apply_response() {
             _awen_menu_reset
             _awen_render_ghost "${_AWEN_MENU_TEXTS[$failure_idx]}" "${_AWEN_MENU_SOURCES[$failure_idx]}"
         elif [[ $count -ge 1 ]]; then
-            local single_text="${_AWEN_MENU_TEXTS[1]}"
-            local single_source="${_AWEN_MENU_SOURCES[1]}"
-            local single_full="${_AWEN_MENU_FULL_CMDS[1]}"
             _awen_menu_reset
-            if [[ "$single_full" == "$BUFFER" && -n "$_AWEN_PATH_COMPLETION" ]]; then
-                _awen_render_ghost "$_AWEN_PATH_COMPLETION" "filesystem"
-            else
-                _awen_render_ghost "$single_text" "$single_source"
-            fi
-        elif [[ -n "$_AWEN_PATH_COMPLETION" ]]; then
-            _awen_menu_reset
-            _awen_render_ghost "$_AWEN_PATH_COMPLETION" "filesystem"
+            _awen_render_ghost "${_AWEN_MENU_TEXTS[1]}" "${_AWEN_MENU_SOURCES[1]}"
         else
             _awen_menu_reset
             _awen_hl_clear
@@ -237,18 +215,8 @@ _awen_apply_response() {
             _AWEN_SUGGESTION="${_AWEN_MENU_FULL_CMDS[1]}"
             _awen_render_menu
         elif [[ $count -ge 1 ]]; then
-            local single_text="${_AWEN_MENU_TEXTS[1]}"
-            local single_source="${_AWEN_MENU_SOURCES[1]}"
-            local single_full="${_AWEN_MENU_FULL_CMDS[1]}"
             _awen_menu_reset
-            if [[ "$single_full" == "$BUFFER" && -n "$_AWEN_PATH_COMPLETION" ]]; then
-                _awen_render_ghost "$_AWEN_PATH_COMPLETION" "filesystem"
-            else
-                _awen_render_ghost "$single_text" "$single_source"
-            fi
-        elif [[ -n "$_AWEN_PATH_COMPLETION" ]]; then
-            _awen_menu_reset
-            _awen_render_ghost "$_AWEN_PATH_COMPLETION" "filesystem"
+            _awen_render_ghost "${_AWEN_MENU_TEXTS[1]}" "${_AWEN_MENU_SOURCES[1]}"
         else
             _awen_menu_reset
             _awen_hl_clear
