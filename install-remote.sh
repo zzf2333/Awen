@@ -163,7 +163,7 @@ capture_stderr = true
 
 [ui]
 ghost_text_color = 242
-dropdown_max_items = 8
+dropdown_max_items = 5
 hint_style = "above"
 risk_detection = true
 command_explanation = false

@@ -222,7 +222,7 @@ capture_stderr = true           # Capture stderr for failure recovery
 mode = "full"                   # "full" (menu + panels) or "minimal" (ghost only)
 ghost_text_color = 242          # Ghost text color (ANSI 256)
 hint_style = "above"            # Hint position: "above" or "below"
-dropdown_max_items = 8          # Max items in suggestion menu
+dropdown_max_items = 5          # Max items in suggestion menu
 risk_detection = true           # Dangerous command warnings
 ```
 

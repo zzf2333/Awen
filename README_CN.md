@@ -152,7 +152,7 @@ capture_stderr = true           # 捕获 stderr 用于失败修复
 [ui]
 ghost_text_color = 242          # ghost text 颜色（ANSI 256）
 hint_style = "above"            # 提示位置："above" 或 "below"
-dropdown_max_items = 8          # 建议菜单最大条目
+dropdown_max_items = 5          # 建议菜单最大条目
 risk_detection = true           # 高危命令警告
 ```
 
