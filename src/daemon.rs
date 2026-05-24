@@ -403,6 +403,13 @@ async fn handle_status(state: &Arc<Mutex<DaemonState>>) -> Response {
         uptime_secs: state.start_time.elapsed().as_secs(),
         history_count: state.history.count(),
         ai_enabled: state.config.ai.enabled,
+        config: Some(StatusConfig {
+            ui_mode: state.config.ui.mode.to_string(),
+            ghost_text_color: state.config.ui.ghost_text_color,
+            dropdown_max_items: state.config.ui.dropdown_max_items,
+            capture_stderr: state.config.context.capture_stderr,
+            stderr_max_chars: state.config.context.stderr_max_chars,
+        }),
     })
 }
 

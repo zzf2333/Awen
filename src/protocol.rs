@@ -133,12 +133,23 @@ pub struct Warning {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusConfig {
+    pub ui_mode: String,
+    pub ghost_text_color: u8,
+    pub dropdown_max_items: usize,
+    pub capture_stderr: bool,
+    pub stderr_max_chars: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusResponse {
     pub running: bool,
     pub pid: u32,
     pub uptime_secs: u64,
     pub history_count: u64,
     pub ai_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<StatusConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

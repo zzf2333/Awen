@@ -114,6 +114,26 @@ awen_init() {
 
     _awen_ensure_daemon
 
+    if [[ -S "$_AWEN_SOCKET" ]]; then
+        local _cfg_resp
+        _cfg_resp=$(_awen_send_nc '{"type":"status"}')
+        if [[ -n "$_cfg_resp" && "$_AWEN_HAS_JQ" == "1" ]]; then
+            local _cv
+            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ghost_text_color // empty' 2>/dev/null)
+            [[ -z "${AWEN_GHOST_STYLE:-}" && -n "$_cv" ]] && _AWEN_GHOST_STYLE="fg=$_cv"
+            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.dropdown_max_items // empty' 2>/dev/null)
+            [[ -z "${AWEN_MENU_MAX_ITEMS:-}" && -n "$_cv" ]] && _AWEN_MENU_MAX="$_cv"
+            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.capture_stderr // empty' 2>/dev/null)
+            [[ -z "${AWEN_CAPTURE_STDERR+x}" && -n "$_cv" ]] && {
+                [[ "$_cv" == "true" ]] && AWEN_CAPTURE_STDERR=1 || AWEN_CAPTURE_STDERR=0
+            }
+            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.stderr_max_chars // empty' 2>/dev/null)
+            [[ -z "${AWEN_STDERR_MAX_CHARS:-}" && -n "$_cv" ]] && _AWEN_STDERR_MAX="$_cv"
+            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ui_mode // empty' 2>/dev/null)
+            [[ -z "${AWEN_UI_MODE:-}" && -n "$_cv" ]] && _AWEN_UI_MODE="$_cv"
+        fi
+    fi
+
     trap '
         _AWEN_MENU_ACTIVE=0
         _AWEN_MENU_COUNT=0

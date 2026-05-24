@@ -108,7 +108,7 @@ impl Default for ContextConfig {
             stderr_max_chars: 500,
             repo_detect: true,
             git_context: true,
-            capture_stderr: false,
+            capture_stderr: true,
         }
     }
 }
@@ -118,7 +118,7 @@ impl Default for UiConfig {
         Self {
             mode: UiMode::default(),
             ghost_text_color: 242,
-            dropdown_max_items: 8,
+            dropdown_max_items: 5,
             hint_style: "above".into(),
             risk_detection: true,
             command_explanation: false,
@@ -249,9 +249,10 @@ mod tests {
         assert!(!config.ai.features.completion);
         assert!(!config.ai.features.nl_generation);
         assert_eq!(config.context.session_history_size, 20);
-        assert!(!config.context.capture_stderr);
+        assert!(config.context.capture_stderr);
         assert_eq!(config.ui.mode, UiMode::Full);
         assert_eq!(config.ui.ghost_text_color, 242);
+        assert_eq!(config.ui.dropdown_max_items, 5);
         assert!(!config.ui.command_explanation);
     }
 

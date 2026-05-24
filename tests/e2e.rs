@@ -142,6 +142,10 @@ async fn test_daemon_start_and_status() {
             assert!(s.running);
             assert!(!s.ai_enabled);
             assert_eq!(s.history_count, 0);
+            let cfg = s.config.expect("status should include config");
+            assert_eq!(cfg.ui_mode, "full");
+            assert_eq!(cfg.dropdown_max_items, 5);
+            assert!(cfg.capture_stderr);
         }
         other => panic!("expected Status response, got: {other:?}"),
     }
