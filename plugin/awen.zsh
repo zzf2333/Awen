@@ -12,7 +12,7 @@ typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
 typeset -ga _AWEN_HL_ENTRIES=()
-typeset -g _AWEN_GHOST_STYLE="${AWEN_GHOST_STYLE:-fg=244}"
+typeset -g _AWEN_GHOST_STYLE="${AWEN_GHOST_STYLE:-fg=242}"
 typeset -g _AWEN_STYLE_DIM="${AWEN_STYLE_DIM:-fg=244}"
 typeset -g _AWEN_STYLE_MUTED="${AWEN_STYLE_MUTED:-fg=250}"
 typeset -g _AWEN_STYLE_TEXT="${AWEN_STYLE_TEXT:-fg=255}"
@@ -114,20 +114,48 @@ awen_init() {
     if [[ -S "$_AWEN_SOCKET" ]]; then
         local _cfg_resp
         _cfg_resp=$(_awen_send_nc '{"type":"status"}')
-        if [[ -n "$_cfg_resp" && "$_AWEN_HAS_JQ" == "1" ]]; then
+        if [[ -n "$_cfg_resp" ]]; then
             local _cv
-            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ghost_text_color // empty' 2>/dev/null)
-            [[ -z "${AWEN_GHOST_STYLE:-}" && -n "$_cv" ]] && _AWEN_GHOST_STYLE="fg=$_cv"
-            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.dropdown_max_items // empty' 2>/dev/null)
-            [[ -z "${AWEN_MENU_MAX_ITEMS:-}" && -n "$_cv" ]] && _AWEN_MENU_MAX="$_cv"
-            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.capture_stderr // empty' 2>/dev/null)
-            [[ -z "${AWEN_CAPTURE_STDERR+x}" && -n "$_cv" ]] && {
-                [[ "$_cv" == "true" ]] && AWEN_CAPTURE_STDERR=1 || AWEN_CAPTURE_STDERR=0
-            }
-            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.stderr_max_chars // empty' 2>/dev/null)
-            [[ -z "${AWEN_STDERR_MAX_CHARS:-}" && -n "$_cv" ]] && _AWEN_STDERR_MAX="$_cv"
-            _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ui_mode // empty' 2>/dev/null)
-            [[ -z "${AWEN_UI_MODE:-}" && -n "$_cv" ]] && _AWEN_UI_MODE="$_cv"
+            if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+                _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ghost_text_color // empty' 2>/dev/null)
+                [[ -z "${AWEN_GHOST_STYLE:-}" && -n "$_cv" ]] && _AWEN_GHOST_STYLE="fg=$_cv"
+                _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.dropdown_max_items // empty' 2>/dev/null)
+                [[ -z "${AWEN_MENU_MAX_ITEMS:-}" && -n "$_cv" ]] && _AWEN_MENU_MAX="$_cv"
+                _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.capture_stderr // empty' 2>/dev/null)
+                [[ -z "${AWEN_CAPTURE_STDERR+x}" && -n "$_cv" ]] && {
+                    [[ "$_cv" == "true" ]] && AWEN_CAPTURE_STDERR=1 || AWEN_CAPTURE_STDERR=0
+                }
+                _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.stderr_max_chars // empty' 2>/dev/null)
+                [[ -z "${AWEN_STDERR_MAX_CHARS:-}" && -n "$_cv" ]] && _AWEN_STDERR_MAX="$_cv"
+                _cv=$(printf '%s\n' "$_cfg_resp" | jq -r '.config.ui_mode // empty' 2>/dev/null)
+                [[ -z "${AWEN_UI_MODE:-}" && -n "$_cv" ]] && _AWEN_UI_MODE="$_cv"
+            else
+                if [[ "$_cfg_resp" == *'"ghost_text_color":'* ]]; then
+                    _cv="${_cfg_resp#*\"ghost_text_color\":}"
+                    _cv="${_cv%%[,\}]*}"
+                    [[ -z "${AWEN_GHOST_STYLE:-}" && -n "$_cv" ]] && _AWEN_GHOST_STYLE="fg=$_cv"
+                fi
+                if [[ "$_cfg_resp" == *'"dropdown_max_items":'* ]]; then
+                    _cv="${_cfg_resp#*\"dropdown_max_items\":}"
+                    _cv="${_cv%%[,\}]*}"
+                    [[ -z "${AWEN_MENU_MAX_ITEMS:-}" && -n "$_cv" ]] && _AWEN_MENU_MAX="$_cv"
+                fi
+                if [[ "$_cfg_resp" == *'"capture_stderr":true'* ]]; then
+                    [[ -z "${AWEN_CAPTURE_STDERR+x}" ]] && AWEN_CAPTURE_STDERR=1
+                elif [[ "$_cfg_resp" == *'"capture_stderr":false'* ]]; then
+                    [[ -z "${AWEN_CAPTURE_STDERR+x}" ]] && AWEN_CAPTURE_STDERR=0
+                fi
+                if [[ "$_cfg_resp" == *'"stderr_max_chars":'* ]]; then
+                    _cv="${_cfg_resp#*\"stderr_max_chars\":}"
+                    _cv="${_cv%%[,\}]*}"
+                    [[ -z "${AWEN_STDERR_MAX_CHARS:-}" && -n "$_cv" ]] && _AWEN_STDERR_MAX="$_cv"
+                fi
+                if [[ "$_cfg_resp" == *'"ui_mode":"'* ]]; then
+                    _cv="${_cfg_resp#*\"ui_mode\":\"}"
+                    _cv="${_cv%%\"*}"
+                    [[ -z "${AWEN_UI_MODE:-}" && -n "$_cv" ]] && _AWEN_UI_MODE="$_cv"
+                fi
+            fi
         fi
     fi
 

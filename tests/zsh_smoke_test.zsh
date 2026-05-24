@@ -208,12 +208,12 @@ assert_eq "fallback multi: source 2" "specs" "${_AWEN_MENU_SOURCES[2]}"
 assert_eq "fallback multi: source 3" "ai" "${_AWEN_MENU_SOURCES[3]}"
 
 # ============================================================
-# Test: AWEN_CAPTURE_STDERR defaults off
+# Test: AWEN_CAPTURE_STDERR defaults on (preexec captures stderr when env unset)
 # ============================================================
 
 assert_eq "AWEN_CAPTURE_STDERR default" \
-    "0" \
-    "${AWEN_CAPTURE_STDERR:-0}"
+    "1" \
+    "${AWEN_CAPTURE_STDERR:-1}"
 
 # ============================================================
 # Test: AWEN_ENABLE_KEYBIND_OVERRIDE=0 skips bindkey
