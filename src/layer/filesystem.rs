@@ -135,6 +135,41 @@ impl FilesystemLayer {
     }
 }
 
+fn extract_last_shell_token(args: &str) -> String {
+    let mut tokens: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for ch in args.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' if !in_single => escaped = true,
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            ' ' | '\t' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        current
+    } else if args.ends_with(' ') && !in_single && !in_double {
+        String::new()
+    } else {
+        tokens.pop().unwrap_or_default()
+    }
+}
+
 fn parse_path_context(input: &str, cwd: &str) -> Option<PathContext> {
     let trimmed = input.trim_start();
     if trimmed.is_empty() {
@@ -153,12 +188,7 @@ fn parse_path_context(input: &str, cwd: &str) -> Option<PathContext> {
     } else if trailing_space && (parts.len() == 1 || args_part.trim_end().is_empty()) {
         String::new()
     } else {
-        let tokens: Vec<&str> = args_part.split_whitespace().collect();
-        if tokens.is_empty() || input.ends_with(' ') {
-            String::new()
-        } else {
-            tokens.last().unwrap_or(&"").to_string()
-        }
+        extract_last_shell_token(args_part)
     };
 
     let is_file_command = FILE_COMMANDS.contains(&command);
@@ -807,5 +837,52 @@ mod tests {
 
         assert!(recency_factor(recent) > recency_factor(old));
         assert!((recency_factor(None) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_extract_simple() {
+        assert_eq!(extract_last_shell_token("arg1 arg2"), "arg2");
+    }
+
+    #[test]
+    fn test_extract_trailing_space() {
+        assert_eq!(extract_last_shell_token("arg1 arg2 "), "");
+    }
+
+    #[test]
+    fn test_extract_double_quotes() {
+        assert_eq!(extract_last_shell_token(r#""My Project/""#), "My Project/");
+    }
+
+    #[test]
+    fn test_extract_unclosed_quote() {
+        assert_eq!(extract_last_shell_token(r#""My Pro"#), "My Pro");
+    }
+
+    #[test]
+    fn test_extract_single_quotes() {
+        assert_eq!(extract_last_shell_token("'My Project/'"), "My Project/");
+    }
+
+    #[test]
+    fn test_extract_backslash_escape() {
+        assert_eq!(extract_last_shell_token(r"foo\ bar"), "foo bar");
+    }
+
+    #[test]
+    fn test_extract_mixed_args() {
+        assert_eq!(extract_last_shell_token(r#"file1.txt "My File""#), "My File");
+    }
+
+    #[test]
+    fn test_parse_quoted_path() {
+        let ctx = parse_path_context(r#"cd "My Project/""#, "/home/user").unwrap();
+        assert_eq!(ctx.fragment, "My Project/");
+    }
+
+    #[test]
+    fn test_parse_backslash_escaped_path() {
+        let ctx = parse_path_context(r"cat foo\ bar", "/home/user").unwrap();
+        assert_eq!(ctx.fragment, "foo bar");
     }
 }
