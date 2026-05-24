@@ -41,7 +41,8 @@ load_plugin_functions() {
     bindkey()      { : }
     autoload()     { : }
     add-zsh-hook() { : }
-    eval "$(sed '/^awen_init$/d' "$PLUGIN_FILE")"
+    typeset -g _AWEN_PLUGIN_DIR="$PLUGIN_DIR"
+    eval "$(sed -e '/^awen_init$/d' -e '/^typeset -g _AWEN_PLUGIN_DIR=/d' "$PLUGIN_FILE")"
 }
 
 load_plugin_functions
@@ -227,7 +228,8 @@ bindkey()      { _KEYBIND_CALLS_DISABLED+=("$*") }
 autoload()     { : }
 add-zsh-hook() { : }
 
-eval "$(sed '/^awen_init$/d' "$PLUGIN_FILE")"
+typeset -g _AWEN_PLUGIN_DIR="$PLUGIN_DIR"
+eval "$(sed -e '/^awen_init$/d' -e '/^typeset -g _AWEN_PLUGIN_DIR=/d' "$PLUGIN_FILE")"
 _awen_find_binary() { _AWEN_BIN="/bin/true" }
 _awen_ensure_daemon() { : }
 awen_init 2>/dev/null
@@ -245,7 +247,8 @@ bindkey()      { _KEYBIND_CALLS_ENABLED+=("$*") }
 autoload()     { : }
 add-zsh-hook() { : }
 
-eval "$(sed '/^awen_init$/d' "$PLUGIN_FILE")"
+typeset -g _AWEN_PLUGIN_DIR="$PLUGIN_DIR"
+eval "$(sed -e '/^awen_init$/d' -e '/^typeset -g _AWEN_PLUGIN_DIR=/d' "$PLUGIN_FILE")"
 _awen_find_binary() { _AWEN_BIN="/bin/true" }
 _awen_ensure_daemon() { : }
 awen_init 2>/dev/null
