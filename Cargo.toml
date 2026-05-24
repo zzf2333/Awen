@@ -1,6 +1,6 @@
 [package]
 name = "awen"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "Terminal Intelligence Layer — Smart when you need it. Silent when you don't."
 license = "MIT"

@@ -271,12 +271,15 @@ _awen_suggest_next() {
     response=$(_awen_send_nc "$request")
     [[ -z "$response" ]] && return
 
-    _awen_apply_response "$response"
-
-    if [[ "$_AWEN_NEED_AI" != "false" ]]; then
-        _awen_render_ai_loading_panel
-        _awen_schedule_ai
+    local has_hint=""
+    if [[ "$_AWEN_HAS_JQ" == "1" ]]; then
+        has_hint=$(printf '%s\n' "$response" | jq -r 'if .hint != null then "1" else "" end' 2>/dev/null)
+    elif [[ "$response" == *'"hint":'*'"text":"'* ]]; then
+        has_hint="1"
     fi
+    [[ -z "$has_hint" ]] && return
+
+    _awen_apply_response "$response"
 }
 
 _awen_suggest_local() {
