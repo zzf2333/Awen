@@ -11,6 +11,7 @@ typeset -g _AWEN_LAST_STDERR_FILE="${TMPDIR:-/tmp}/awen-stderr-$$"
 typeset -g _AWEN_SOCKET=""
 typeset -g _AWEN_BIN=""
 typeset -g _AWEN_GHOST_HIGHLIGHT=""
+typeset -ga _AWEN_HL_ENTRIES=()
 typeset -g _AWEN_GHOST_STYLE="${AWEN_GHOST_STYLE:-fg=244}"
 typeset -g _AWEN_STYLE_DIM="${AWEN_STYLE_DIM:-fg=244}"
 typeset -g _AWEN_STYLE_MUTED="${AWEN_STYLE_MUTED:-fg=250}"

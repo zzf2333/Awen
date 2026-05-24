@@ -50,42 +50,23 @@ _awen_source_icon() {
 # --- Highlight Manager ---
 
 _awen_hl_clear() {
-    region_highlight=("${(@)region_highlight:#*$_AWEN_GHOST_STYLE}")
-    region_highlight=("${(@)region_highlight:#*standout*}")
-    region_highlight=("${(@)region_highlight:#*bg=237*}")
-    region_highlight=("${(@)region_highlight:#*bg=236*}")
-    region_highlight=("${(@)region_highlight:#*bg=235*}")
-    region_highlight=("${(@)region_highlight:#*bg=234*}")
-    region_highlight=("${(@)region_highlight:#*fg=252*}")
-    region_highlight=("${(@)region_highlight:#*fg=253*}")
-    region_highlight=("${(@)region_highlight:#*fg=250*}")
-    region_highlight=("${(@)region_highlight:#*fg=255*}")
-    region_highlight=("${(@)region_highlight:#*fg=245*}")
-    region_highlight=("${(@)region_highlight:#*fg=244*}")
-    region_highlight=("${(@)region_highlight:#*fg=240*}")
-    region_highlight=("${(@)region_highlight:#*fg=241*}")
-    region_highlight=("${(@)region_highlight:#*fg=146*}")
-    region_highlight=("${(@)region_highlight:#*fg=75*}")
-    region_highlight=("${(@)region_highlight:#*fg=73*}")
-    region_highlight=("${(@)region_highlight:#*fg=69*}")
-    region_highlight=("${(@)region_highlight:#*fg=177*}")
-    region_highlight=("${(@)region_highlight:#*fg=220*}")
-    region_highlight=("${(@)region_highlight:#*fg=114*}")
-    region_highlight=("${(@)region_highlight:#*fg=108*}")
-    region_highlight=("${(@)region_highlight:#*fg=214*}")
-    region_highlight=("${(@)region_highlight:#*fg=82*}")
-    region_highlight=("${(@)region_highlight:#*fg=82,bold*}")
-    region_highlight=("${(@)region_highlight:#*fg=238*}")
+    local entry
+    for entry in "${_AWEN_HL_ENTRIES[@]}"; do
+        region_highlight=("${(@)region_highlight:#$entry}")
+    done
+    _AWEN_HL_ENTRIES=()
     _AWEN_GHOST_HIGHLIGHT=""
 }
 
 _awen_hl_add() {
     region_highlight+=("$1")
+    _AWEN_HL_ENTRIES+=("$1")
 }
 
 _awen_hl_set_ghost() {
     _AWEN_GHOST_HIGHLIGHT="$1"
     region_highlight+=("$1")
+    _AWEN_HL_ENTRIES+=("$1")
 }
 
 # --- State reset helpers ---
