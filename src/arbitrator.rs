@@ -20,6 +20,7 @@ impl Arbitrator {
         });
         suggestions.retain(|s| s.confidence >= 0.1);
         suggestions.truncate(8);
+        group_by_source(&mut suggestions);
 
         SuggestResponse {
             suggestions,
@@ -125,6 +126,20 @@ fn has_risk_indicator(text: &str) -> bool {
         || lower.contains("-rf /")
         || lower.contains("--hard")
         || lower.contains("--no-verify")
+}
+
+fn group_by_source(suggestions: &mut Vec<Suggestion>) {
+    let mut source_order: Vec<SuggestionSource> = Vec::new();
+    for s in suggestions.iter() {
+        if !source_order.contains(&s.source) {
+            source_order.push(s.source);
+        }
+    }
+    suggestions.sort_by(|a, b| {
+        let a_idx = source_order.iter().position(|s| *s == a.source).unwrap();
+        let b_idx = source_order.iter().position(|s| *s == b.source).unwrap();
+        a_idx.cmp(&b_idx)
+    });
 }
 
 fn dedup_suggestions(suggestions: &mut Vec<Suggestion>) {
@@ -331,5 +346,19 @@ mod tests {
 
         let result = Arbitrator::arbitrate(suggestions, &ctx, None, None);
         assert_eq!(result.suggestions[0].text, "git status");
+    }
+
+    #[test]
+    fn test_group_by_source() {
+        let suggestions = vec![
+            make_suggestion("claude --resume", SuggestionSource::History, 0.95),
+            make_suggestion("--resume", SuggestionSource::Specs, 0.90),
+            make_suggestion("claude remote-control", SuggestionSource::History, 0.85),
+        ];
+
+        let result = Arbitrator::arbitrate(suggestions, &default_context(), None, None);
+        assert_eq!(result.suggestions[0].source, SuggestionSource::History);
+        assert_eq!(result.suggestions[1].source, SuggestionSource::History);
+        assert_eq!(result.suggestions[2].source, SuggestionSource::Specs);
     }
 }
