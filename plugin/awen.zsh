@@ -192,6 +192,7 @@ awen_init() {
     zle -N _awen_on_ai_signal
 
     if [[ "${AWEN_ENABLE_KEYBIND_OVERRIDE:-1}" == "1" ]]; then
+        zle -N bracketed-paste _awen_bracketed_paste
         bindkey -M main '\e[C' _awen_accept
         bindkey -M main '\eOC' _awen_accept
         bindkey -M main '\e[1;5C' _awen_accept_word

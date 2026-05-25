@@ -134,6 +134,17 @@ _awen_self_insert() {
     _awen_suggest_local
 }
 
+_awen_bracketed_paste() {
+    if (( _AWEN_MENU_ACTIVE )); then
+        _awen_hl_clear
+        _awen_menu_reset
+        POSTDISPLAY=""
+    fi
+    _AWEN_SUGGESTION=""
+    zle .bracketed-paste
+    _awen_suggest_local
+}
+
 _awen_backward_delete_char() {
     if (( _AWEN_MENU_ACTIVE )); then
         _awen_menu_reset
