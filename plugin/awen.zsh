@@ -46,6 +46,7 @@ typeset -g _AWEN_FAILURE_SHOWN=0
 # Menu state
 typeset -g  _AWEN_MENU_ACTIVE=0
 typeset -g  _AWEN_MENU_INDEX=1
+typeset -g  _AWEN_MENU_USER_SELECTED=0
 typeset -ga _AWEN_MENU_TEXTS=()
 typeset -ga _AWEN_MENU_SOURCES=()
 typeset -ga _AWEN_MENU_DESCS=()

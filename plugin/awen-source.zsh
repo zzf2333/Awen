@@ -74,6 +74,7 @@ _awen_hl_set_ghost() {
 _awen_menu_reset() {
     _AWEN_MENU_ACTIVE=0
     _AWEN_MENU_INDEX=1
+    _AWEN_MENU_USER_SELECTED=0
     _AWEN_MENU_COUNT=0
     _AWEN_MENU_TEXTS=()
     _AWEN_MENU_SOURCES=()

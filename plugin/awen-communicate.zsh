@@ -146,21 +146,21 @@ _awen_apply_response() {
         while [[ "$_remaining" == *'"text":"'* ]]; do
             local _after_text="${_remaining#*\"text\":\"}"
             local s_text=$(_awen_extract_json_value "$_after_text")
-            local s_source="history"
-            local s_desc=""
-            if [[ "$_remaining" == *'"source":"'* ]]; then
-                local _after_src="${_remaining#*\"source\":\"}"
-                s_source=$(_awen_extract_json_value "$_after_src")
-            fi
             local _obj_end="${_after_text#*\}}"
             local _obj_chunk="${_after_text%"$_obj_end"}"
+            local s_source=""
+            local s_desc=""
+            if [[ "$_obj_chunk" == *'"source":"'* ]]; then
+                local _after_src="${_obj_chunk#*\"source\":\"}"
+                s_source=$(_awen_extract_json_value "$_after_src")
+            fi
             if [[ "$_obj_chunk" == *'"description":"'* ]]; then
                 local _after_desc="${_obj_chunk#*\"description\":\"}"
                 s_desc=$(_awen_extract_json_value "$_after_desc")
             fi
             if [[ -n "$s_text" ]]; then
                 _AWEN_MENU_TEXTS+=("$s_text")
-                _AWEN_MENU_SOURCES+=("${s_source:-history}")
+                _AWEN_MENU_SOURCES+=("$s_source")
                 _AWEN_MENU_DESCS+=("$s_desc")
             fi
             _remaining="${_after_text#*\}}"

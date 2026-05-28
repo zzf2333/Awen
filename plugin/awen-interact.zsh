@@ -167,6 +167,7 @@ _awen_backward_delete_char() {
 
 _awen_menu_up() {
     if (( _AWEN_MENU_ACTIVE )); then
+        _AWEN_MENU_USER_SELECTED=1
         if (( _AWEN_MENU_INDEX > 1 )); then
             (( _AWEN_MENU_INDEX-- ))
         else
@@ -188,6 +189,7 @@ _awen_menu_up() {
 
 _awen_menu_down() {
     if (( _AWEN_MENU_ACTIVE )); then
+        _AWEN_MENU_USER_SELECTED=1
         if (( _AWEN_MENU_INDEX < _AWEN_MENU_COUNT )); then
             (( _AWEN_MENU_INDEX++ ))
         else
@@ -209,7 +211,7 @@ _awen_menu_down() {
 
 _awen_menu_accept() {
     _awen_cancel_pending_ai
-    if (( _AWEN_MENU_ACTIVE )); then
+    if (( _AWEN_MENU_ACTIVE && _AWEN_MENU_USER_SELECTED )); then
         BUFFER="${_AWEN_MENU_FULL_CMDS[$_AWEN_MENU_INDEX]}"
         CURSOR=${#BUFFER}
     fi
