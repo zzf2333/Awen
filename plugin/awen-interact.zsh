@@ -141,7 +141,16 @@ _awen_bracketed_paste() {
         POSTDISPLAY=""
     fi
     _AWEN_SUGGESTION=""
+    local _pre_cursor=$CURSOR
     zle .bracketed-paste
+    if (( _pre_cursor > 0 && CURSOR > _pre_cursor )); then
+        local _char_before="${BUFFER[$_pre_cursor]}"
+        local _first_pasted="${BUFFER[$((  _pre_cursor + 1 ))]}"
+        if [[ "$_char_before" == [[:alnum:]] && "$_first_pasted" == [/~.\'] ]]; then
+            BUFFER="${BUFFER[1,$_pre_cursor]} ${BUFFER[$((  _pre_cursor + 1 )),$#BUFFER]}"
+            (( CURSOR++ ))
+        fi
+    fi
     _awen_suggest_local
 }
 
