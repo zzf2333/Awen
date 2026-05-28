@@ -132,7 +132,7 @@ impl SuggestionPipeline {
             let mut suggestions = layers.history.suggest_next(
                 &req_context.cwd,
                 req_context.last_command.as_deref(),
-                5,
+                10,
             );
 
             let mut hint = None;
@@ -173,7 +173,7 @@ impl SuggestionPipeline {
                 input,
                 &req_context.cwd,
                 req_context.last_command.as_deref(),
-                5,
+                10,
             ));
             suggestions.extend(layers.specs.suggest(input, cursor_pos));
 

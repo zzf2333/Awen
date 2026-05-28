@@ -118,7 +118,7 @@ impl Default for UiConfig {
         Self {
             mode: UiMode::default(),
             ghost_text_color: 242,
-            dropdown_max_items: 5,
+            dropdown_max_items: 8,
             hint_style: "above".into(),
             risk_detection: true,
             command_explanation: false,
@@ -252,7 +252,7 @@ mod tests {
         assert!(config.context.capture_stderr);
         assert_eq!(config.ui.mode, UiMode::Full);
         assert_eq!(config.ui.ghost_text_color, 242);
-        assert_eq!(config.ui.dropdown_max_items, 5);
+        assert_eq!(config.ui.dropdown_max_items, 8);
         assert!(!config.ui.command_explanation);
     }
 
