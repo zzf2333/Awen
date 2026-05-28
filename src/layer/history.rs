@@ -120,11 +120,7 @@ impl HistoryLayer {
         Ok(())
     }
 
-    fn query_sequence_boosts(
-        &self,
-        prev_command: &str,
-        weight: f64,
-    ) -> HashMap<String, f64> {
+    fn query_sequence_boosts(&self, prev_command: &str, weight: f64) -> HashMap<String, f64> {
         let prev_norm = normalize_command(prev_command);
         if prev_norm.is_empty() {
             return HashMap::new();
@@ -374,7 +370,8 @@ impl HistoryLayer {
             .map(|(score, text)| Suggestion {
                 text,
                 source: SuggestionSource::History,
-                confidence: (score / max_score * NEXT_CONFIDENCE_SCALE).clamp(0.15, NEXT_CONFIDENCE_CAP),
+                confidence: (score / max_score * NEXT_CONFIDENCE_SCALE)
+                    .clamp(0.15, NEXT_CONFIDENCE_CAP),
                 description: None,
             })
             .collect()
@@ -530,9 +527,7 @@ mod tests {
         layer
             .record("claude --dangerously-skip-permissions", "/app", 0)
             .unwrap();
-        layer
-            .record("claude --print config", "/app", 0)
-            .unwrap();
+        layer.record("claude --print config", "/app", 0).unwrap();
 
         let results = layer.suggest("claude --prin", "/app", None, 10);
         for s in &results {
@@ -584,7 +579,10 @@ mod tests {
         assert_eq!(normalize_command("git commit -m 'fix'"), "git commit");
         assert_eq!(normalize_command("cargo test --lib"), "cargo test");
         assert_eq!(normalize_command("ls -la"), "ls");
-        assert_eq!(normalize_command("docker run -p 3000:3000 app"), "docker run");
+        assert_eq!(
+            normalize_command("docker run -p 3000:3000 app"),
+            "docker run"
+        );
         assert_eq!(normalize_command("npm install express"), "npm install");
         assert_eq!(normalize_command("pwd"), "pwd");
         assert_eq!(normalize_command(""), "");
@@ -594,7 +592,9 @@ mod tests {
     #[test]
     fn test_record_sequence_basic() {
         let (_dir, layer) = setup();
-        layer.record_sequence("git add .", "git commit -m 'test'").unwrap();
+        layer
+            .record_sequence("git add .", "git commit -m 'test'")
+            .unwrap();
 
         let boosts = layer.query_sequence_boosts("git add .", SEQUENCE_BOOST_NEXT);
         assert!(boosts.contains_key("git commit"));
@@ -604,14 +604,19 @@ mod tests {
     fn test_record_sequence_count_increment() {
         let (_dir, layer) = setup();
         for _ in 0..5 {
-            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+            layer
+                .record_sequence("git add .", "git commit -m 'x'")
+                .unwrap();
         }
         layer.record_sequence("git add .", "git status").unwrap();
 
         let boosts = layer.query_sequence_boosts("git add", SEQUENCE_BOOST_NEXT);
         let commit_boost = boosts.get("git commit").copied().unwrap_or(1.0);
         let status_boost = boosts.get("git status").copied().unwrap_or(1.0);
-        assert!(commit_boost > status_boost, "higher count should get higher boost");
+        assert!(
+            commit_boost > status_boost,
+            "higher count should get higher boost"
+        );
     }
 
     #[test]
@@ -631,7 +636,10 @@ mod tests {
         layer.record_sequence("ls -la", "ls -l").unwrap();
 
         let boosts = layer.query_sequence_boosts("ls", SEQUENCE_BOOST_NEXT);
-        assert!(boosts.is_empty(), "same normalized command should be skipped");
+        assert!(
+            boosts.is_empty(),
+            "same normalized command should be skipped"
+        );
     }
 
     #[test]
@@ -642,7 +650,9 @@ mod tests {
         layer.record("git push", "/app", 0).unwrap();
 
         for _ in 0..5 {
-            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+            layer
+                .record_sequence("git add .", "git commit -m 'x'")
+                .unwrap();
         }
 
         let results = layer.suggest_next("/app", Some("git add ."), 5);
@@ -660,7 +670,10 @@ mod tests {
         layer.record("cargo test", "/app", 0).unwrap();
 
         let results = layer.suggest_next("/app", Some("cargo fmt"), 5);
-        assert!(!results.is_empty(), "should still return results without sequence data");
+        assert!(
+            !results.is_empty(),
+            "should still return results without sequence data"
+        );
     }
 
     #[test]
@@ -670,14 +683,19 @@ mod tests {
         layer.record("git checkout main", "/app", 0).unwrap();
 
         for _ in 0..5 {
-            layer.record_sequence("git add .", "git commit -m 'x'").unwrap();
+            layer
+                .record_sequence("git add .", "git commit -m 'x'")
+                .unwrap();
         }
 
         let results = layer.suggest("git", "/app", Some("git add ."), 10);
         let commit_pos = results.iter().position(|s| s.text.contains("commit"));
         let checkout_pos = results.iter().position(|s| s.text.contains("checkout"));
         if let (Some(c), Some(co)) = (commit_pos, checkout_pos) {
-            assert!(c < co, "sequenced git commit should rank above git checkout");
+            assert!(
+                c < co,
+                "sequenced git commit should rank above git checkout"
+            );
         }
     }
 }

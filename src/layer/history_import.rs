@@ -361,11 +361,16 @@ mod tests {
         .unwrap();
 
         let result = import_zsh_history(&db_path, &hist_path).unwrap();
-        assert_eq!(result.sequences_imported, 0, "sensitive commands should break sequence chain");
+        assert_eq!(
+            result.sequences_imported, 0,
+            "sensitive commands should break sequence chain"
+        );
 
         let conn = Connection::open(&db_path).unwrap();
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM command_sequences", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM command_sequences", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(count, 0);
     }

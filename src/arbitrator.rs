@@ -137,8 +137,14 @@ fn group_by_source(suggestions: &mut [Suggestion]) {
         }
     }
     suggestions.sort_by(|a, b| {
-        let a_idx = source_order.iter().position(|s| *s == a.source).unwrap_or(usize::MAX);
-        let b_idx = source_order.iter().position(|s| *s == b.source).unwrap_or(usize::MAX);
+        let a_idx = source_order
+            .iter()
+            .position(|s| *s == a.source)
+            .unwrap_or(usize::MAX);
+        let b_idx = source_order
+            .iter()
+            .position(|s| *s == b.source)
+            .unwrap_or(usize::MAX);
         a_idx.cmp(&b_idx)
     });
 }

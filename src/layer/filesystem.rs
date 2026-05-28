@@ -871,7 +871,10 @@ mod tests {
 
     #[test]
     fn test_extract_mixed_args() {
-        assert_eq!(extract_last_shell_token(r#"file1.txt "My File""#), "My File");
+        assert_eq!(
+            extract_last_shell_token(r#"file1.txt "My File""#),
+            "My File"
+        );
     }
 
     #[test]
