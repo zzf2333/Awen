@@ -290,7 +290,7 @@ impl HistoryLayer {
             .map(|(score, text)| Suggestion {
                 text,
                 source: SuggestionSource::History,
-                confidence: (score / max_score).min(1.0),
+                confidence: (score / max_score).clamp(0.15, 1.0),
                 description: None,
             })
             .collect()
@@ -374,7 +374,7 @@ impl HistoryLayer {
             .map(|(score, text)| Suggestion {
                 text,
                 source: SuggestionSource::History,
-                confidence: (score / max_score * NEXT_CONFIDENCE_SCALE).min(NEXT_CONFIDENCE_CAP),
+                confidence: (score / max_score * NEXT_CONFIDENCE_SCALE).clamp(0.15, NEXT_CONFIDENCE_CAP),
                 description: None,
             })
             .collect()
