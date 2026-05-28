@@ -129,7 +129,7 @@ fn has_risk_indicator(text: &str) -> bool {
         || lower.contains("--no-verify")
 }
 
-fn group_by_source(suggestions: &mut Vec<Suggestion>) {
+fn group_by_source(suggestions: &mut [Suggestion]) {
     let mut source_order: Vec<SuggestionSource> = Vec::new();
     for s in suggestions.iter() {
         if !source_order.contains(&s.source) {
@@ -137,8 +137,8 @@ fn group_by_source(suggestions: &mut Vec<Suggestion>) {
         }
     }
     suggestions.sort_by(|a, b| {
-        let a_idx = source_order.iter().position(|s| *s == a.source).unwrap();
-        let b_idx = source_order.iter().position(|s| *s == b.source).unwrap();
+        let a_idx = source_order.iter().position(|s| *s == a.source).unwrap_or(usize::MAX);
+        let b_idx = source_order.iter().position(|s| *s == b.source).unwrap_or(usize::MAX);
         a_idx.cmp(&b_idx)
     });
 }
