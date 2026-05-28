@@ -241,7 +241,7 @@ impl HistoryLayer {
                 }
                 let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
                 let recency_decay = 1.0 / age_hours.ln().max(1.0);
-                let frequency_boost = (*count as f64).ln().max(1.0);
+                let frequency_boost = (*count as f64).max(1.0).sqrt();
                 let dir_affinity = if cmd_cwd == cwd {
                     DIR_AFFINITY_SUGGEST
                 } else {
@@ -337,7 +337,7 @@ impl HistoryLayer {
         for (command, cmd_cwd, timestamp, count, exit_code) in &rows {
             let age_hours = ((now - timestamp) as f64 / 3600.0).max(1.0);
             let recency = 1.0 / age_hours.ln().max(1.0);
-            let frequency = (*count as f64).ln().max(1.0);
+            let frequency = (*count as f64).max(1.0).sqrt();
             let dir_affinity = if cmd_cwd == cwd {
                 DIR_AFFINITY_NEXT
             } else {
